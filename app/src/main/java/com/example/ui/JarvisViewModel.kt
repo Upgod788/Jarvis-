@@ -38,6 +38,12 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
 
     val aiSettings: StateFlow<AISettings> = app.aiProvider.settingsManager.settings
 
+    val themeMode: StateFlow<com.example.ui.theme.ThemeMode> = app.themeManager.themeMode
+
+    fun setThemeMode(mode: com.example.ui.theme.ThemeMode) {
+        app.themeManager.setThemeMode(mode)
+    }
+
     init {
         // Collect speech recognizer listening state
         viewModelScope.launch {

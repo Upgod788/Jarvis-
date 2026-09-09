@@ -40,6 +40,7 @@ fun MainAppScreen(
     val conversations by viewModel.conversations.collectAsStateWithLifecycle()
     val memories by viewModel.memories.collectAsStateWithLifecycle()
     val aiSettings by viewModel.aiSettings.collectAsStateWithLifecycle()
+    val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
 
     var currentDestination by remember { mutableStateOf(AppNavDestination.HOME) }
     var speechRate by remember { mutableStateOf(1.0f) }
@@ -160,6 +161,8 @@ fun MainAppScreen(
                         pitch = pitch,
                         preferredLanguage = language,
                         aiSettings = aiSettings,
+                        themeMode = themeMode,
+                        onThemeModeChange = { viewModel.setThemeMode(it) },
                         onSpeechRateChange = {
                             speechRate = it
                             viewModel.setSpeechRate(it)

@@ -47,6 +47,8 @@ fun SettingsScreen(
     pitch: Float,
     preferredLanguage: String,
     aiSettings: AISettings = AISettings(),
+    themeMode: ThemeMode = ThemeMode.DARK,
+    onThemeModeChange: (ThemeMode) -> Unit = {},
     onSpeechRateChange: (Float) -> Unit,
     onPitchChange: (Float) -> Unit,
     onLanguageChange: (String) -> Unit,
@@ -117,6 +119,153 @@ fun SettingsScreen(
             fontWeight = FontWeight.Bold,
             letterSpacing = 1.5.sp
         )
+
+        // THEME & DISPLAY APPEARANCE
+        SettingsSectionCard(title = "Theme & Visual Appearance", icon = Icons.Default.Palette) {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text(
+                    text = "Select your preferred visual mode for the JARVIS interface. Changes take effect immediately across all system HUD displays.",
+                    color = JarvisTextSecondary,
+                    fontSize = 12.sp,
+                    lineHeight = 17.sp
+                )
+
+                // 3 Theme Options: System Default, Dark, Light
+                ThemeMode.values().forEach { mode ->
+                    val isSelected = themeMode == mode
+                    val modeIcon = when (mode) {
+                        ThemeMode.SYSTEM -> Icons.Default.BrightnessAuto
+                        ThemeMode.DARK -> Icons.Default.DarkMode
+                        ThemeMode.LIGHT -> Icons.Default.LightMode
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                if (isSelected) JarvisCyanPrimary.copy(alpha = 0.12f) else JarvisCardSurface
+                            )
+                            .border(
+                                width = if (isSelected) 1.5.dp else 1.dp,
+                                color = if (isSelected) JarvisCyanPrimary else JarvisCardBorder,
+                                shape = RoundedCornerShape(12.dp)
+                            )
+                            .clickable { onThemeModeChange(mode) }
+                            .testTag("theme_option_${mode.id}")
+                            .padding(horizontal = 14.dp, vertical = 12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (isSelected) JarvisCyanPrimary.copy(alpha = 0.22f)
+                                        else JarvisDarkBackground.copy(alpha = 0.4f)
+                                    ),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = modeIcon,
+                                    contentDescription = mode.title,
+                                    tint = if (isSelected) JarvisCyanPrimary else JarvisTextSecondary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        text = mode.title,
+                                        color = JarvisTextPrimary,
+                                        fontSize = 14.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                    )
+                                    if (isSelected) {
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(JarvisCyanPrimary.copy(alpha = 0.2f))
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = "ACTIVE",
+                                                color = JarvisCyanPrimary,
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                letterSpacing = 0.8.sp
+                                            )
+                                        }
+                                    }
+                                }
+                                Text(
+                                    text = mode.subtitle,
+                                    color = JarvisTextMuted,
+                                    fontSize = 11.sp,
+                                    lineHeight = 15.sp
+                                )
+                            }
+
+                            RadioButton(
+                                selected = isSelected,
+                                onClick = { onThemeModeChange(mode) },
+                                colors = RadioButtonDefaults.colors(
+                                    selectedColor = JarvisCyanPrimary,
+                                    unselectedColor = JarvisTextMuted
+                                )
+                            )
+                        }
+                    }
+                }
+
+                // Live Preview Summary Pill
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(JarvisDarkBackground.copy(alpha = 0.45f))
+                        .border(1.dp, JarvisCardBorder, RoundedCornerShape(10.dp))
+                        .padding(horizontal = 14.dp, vertical = 10.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .clip(CircleShape)
+                                    .background(JarvisCyanPrimary)
+                            )
+                            Text(
+                                text = "Current Profile:",
+                                color = JarvisTextSecondary,
+                                fontSize = 12.sp
+                            )
+                        }
+                        Text(
+                            text = themeMode.title,
+                            color = JarvisCyanPrimary,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
 
         // 1. GENERAL / SPEECH SYNTHESIS
         SettingsSectionCard(title = "Voice & Speech Synthesis", icon = Icons.Default.RecordVoiceOver) {

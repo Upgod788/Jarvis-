@@ -29,6 +29,9 @@ class JarvisApplication : Application() {
     lateinit var confirmationManager: ConfirmationManager
         private set
 
+    lateinit var themeManager: com.example.ui.theme.ThemeManager
+        private set
+
     lateinit var aiProvider: DynamicAIProvider
         private set
 
@@ -51,6 +54,7 @@ class JarvisApplication : Application() {
         conversationRepository = ConversationRepository(database.conversationDao())
         toolRegistry = ToolRegistry(memoryRepository)
         confirmationManager = ConfirmationManager()
+        themeManager = com.example.ui.theme.ThemeManager(this)
         aiProvider = DynamicAIProvider(this)
         speechRecognizerManager = SpeechRecognizerManager(this)
         textToSpeechManager = TextToSpeechManager(this)
