@@ -1,0 +1,22 @@
+<resources>
+    <string name="app_name">JARVIS AI</string>
+    <string name="nav_home">Home</string>
+    <string name="nav_history">History</string>
+    <string name="nav_memory">Memory</string>
+    <string name="nav_settings">Settings</string>
+    <string name="tap_to_talk">Tap to Talk</string>
+    <string name="listening">Listening…</string>
+    <string name="thinking">Processing Command…</string>
+    <string name="executing">Executing Action…</string>
+    <string name="speaking">Speaking…</string>
+    <string name="mic_permission_title">Microphone Access Required</string>
+    <string name="mic_permission_rationale">JARVIS requires microphone permission to listen to your voice commands, process natural language, and activate hands-free operations.</string>
+    <string name="mic_permission_permanently_denied">Microphone permission has been disabled. To use voice commands with JARVIS, please enable Microphone access in Android Settings.</string>
+    <string name="mic_permission_grant">Grant Access</string>
+    <string name="mic_permission_open_settings">Open Settings</string>
+    <string name="mic_permission_cancel">Use Text Only</string>
+    <string name="mic_permission_banner_msg">Voice input is disabled. Tap to enable microphone for spoken commands.</string>
+    <string name="creator_attribution">Make By ❤️ Form Priyanshu Dubey</string>
+    <string name="accessibility_service_label">JARVIS Accessibility Assistant</string>
+    <string name="accessibility_service_description">Enables JARVIS to interact with supported applications on your behalf to assist with commands when direct Android APIs are restricted.</string>
+</resources>
