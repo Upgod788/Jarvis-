@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JARVIS AI - Direct Download</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    }
+    body {
+      background: radial-gradient(circle at top, #091322 0%, #03070d 100%);
+      color: #e0f2fe;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      background: rgba(14, 25, 45, 0.85);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      box-shadow: 0 0 40px rgba(6, 182, 212, 0.15);
+      backdrop-filter: blur(16px);
+      border-radius: 24px;
+      max-width: 480px;
+      width: 100%;
+      padding: 36px 28px;
+      text-align: center;
+    }
+    .badge {
+      display: inline-block;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      background: rgba(6, 182, 212, 0.15);
+      border: 1px solid #06b6d4;
+      color: #22d3ee;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 20px;
+    }
+    .reactor-glow {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 20px;
+      border-radius: 50%;
+      border: 3px solid #00f0ff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 25px #00f0ff, inset 0 0 20px #00f0ff;
+      animation: pulse 2.5s infinite;
+    }
+    .inner-circle {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #00f0ff;
+      box-shadow: 0 0 15px #00f0ff;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 0.9; }
+      50% { transform: scale(1.06); opacity: 1; }
+    }
+    h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 10px;
+      letter-spacing: 0.5px;
+    }
+    p {
+      color: #94a3b8;
+      font-size: 15px;
+      line-height: 1.5;
+      margin-bottom: 28px;
+    }
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      width: 100%;
+      padding: 16px 24px;
+      border-radius: 14px;
+      font-size: 16px;
+      font-weight: 700;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      margin-bottom: 12px;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%);
+      color: #ffffff;
+      box-shadow: 0 4px 20px rgba(0, 114, 255, 0.4);
+      border: none;
+    }
+    .btn-primary:hover {
+      box-shadow: 0 6px 28px rgba(0, 114, 255, 0.6);
+      transform: translateY(-2px);
+    }
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #cbd5e1;
+    }
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+      color: #ffffff;
+      transform: translateY(-2px);
+    }
+    .info {
+      margin-top: 24px;
+      padding-top: 20px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      font-size: 13px;
+      color: #64748b;
+      line-height: 1.6;
+    }
+    .info b {
+      color: #94a3b8;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="reactor-glow">
+      <div class="inner-circle"></div>
+    </div>
+    <div class="badge">Direct Download</div>
+    <h1>JARVIS AI Assistant</h1>
+    <p>Install the standalone Android application directly onto your smartphone or tablet.</p>
+
+    <a href="/app-debug.apk" class="btn btn-primary" download="JARVIS-AI.apk">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z"/>
+      </svg>
+      Direct Download APK (22 MB)
+    </a>
+
+    <a href="/jarvis-project.zip" class="btn btn-secondary" download="jarvis-project.zip">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+      </svg>
+      Download Source Code (.ZIP)
+    </a>
+
+    <div class="info">
+      <b>Install Instructions:</b><br>
+      Tap the APK button &rarr; Open the downloaded file &rarr; Enable <i>"Allow from this source"</i> if prompted &rarr; Tap <b>Install</b>.
+    </div>
+  </div>
+</body>
+</html>

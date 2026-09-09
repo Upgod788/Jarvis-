@@ -53,7 +53,7 @@ class JarvisApplication : Application() {
         memoryRepository = MemoryRepository(database.memoryDao())
         conversationRepository = ConversationRepository(database.conversationDao())
         toolRegistry = ToolRegistry(memoryRepository)
-        confirmationManager = ConfirmationManager()
+        confirmationManager = ConfirmationManager(this)
         themeManager = com.example.ui.theme.ThemeManager(this)
         aiProvider = DynamicAIProvider(this)
         speechRecognizerManager = SpeechRecognizerManager(this)

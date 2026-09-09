@@ -41,6 +41,7 @@ fun MainAppScreen(
     val memories by viewModel.memories.collectAsStateWithLifecycle()
     val aiSettings by viewModel.aiSettings.collectAsStateWithLifecycle()
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+    val confirmationSettings by viewModel.confirmationSettings.collectAsStateWithLifecycle()
 
     var currentDestination by remember { mutableStateOf(AppNavDestination.HOME) }
     var speechRate by remember { mutableStateOf(1.0f) }
@@ -180,7 +181,13 @@ fun MainAppScreen(
                         onUpdateOpenRouterConfig = { key, model -> viewModel.updateOpenRouterConfig(key, model) },
                         onTestOpenRouterConnection = { key, model -> viewModel.testOpenRouterConnection(key, model) },
                         onClearHistory = { viewModel.clearHistory() },
-                        onClearMemories = { viewModel.clearAllMemories() }
+                        onClearMemories = { viewModel.clearAllMemories() },
+                        confirmCalls = confirmationSettings.requireCallConfirmation,
+                        confirmSms = confirmationSettings.requireSmsConfirmation,
+                        confirmWhatsApp = confirmationSettings.confirmWhatsAppMessages,
+                        onConfirmCallsChange = { viewModel.setConfirmCalls(it) },
+                        onConfirmSmsChange = { viewModel.setConfirmSms(it) },
+                        onConfirmWhatsAppChange = { viewModel.setConfirmWhatsApp(it) }
                     )
                 }
             }

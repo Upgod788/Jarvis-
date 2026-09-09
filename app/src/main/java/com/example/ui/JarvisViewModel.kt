@@ -40,8 +40,22 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
 
     val themeMode: StateFlow<com.example.ui.theme.ThemeMode> = app.themeManager.themeMode
 
+    val confirmationSettings: StateFlow<com.example.agent.ConfirmationSettings> = app.confirmationManager.settings
+
     fun setThemeMode(mode: com.example.ui.theme.ThemeMode) {
         app.themeManager.setThemeMode(mode)
+    }
+
+    fun setConfirmCalls(enabled: Boolean) {
+        app.confirmationManager.setCallConfirmation(enabled)
+    }
+
+    fun setConfirmSms(enabled: Boolean) {
+        app.confirmationManager.setSmsConfirmation(enabled)
+    }
+
+    fun setConfirmWhatsApp(enabled: Boolean) {
+        app.confirmationManager.setWhatsAppConfirmation(enabled)
     }
 
     init {

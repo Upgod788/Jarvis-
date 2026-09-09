@@ -58,6 +58,12 @@ fun SettingsScreen(
     onTestOpenRouterConnection: (suspend (apiKey: String, model: String) -> Pair<Boolean, String>)? = null,
     onClearHistory: () -> Unit,
     onClearMemories: () -> Unit,
+    confirmCalls: Boolean = true,
+    confirmSms: Boolean = true,
+    confirmWhatsApp: Boolean = true,
+    onConfirmCallsChange: (Boolean) -> Unit = {},
+    onConfirmSmsChange: (Boolean) -> Unit = {},
+    onConfirmWhatsAppChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -83,10 +89,6 @@ fun SettingsScreen(
             "openai/gpt-4o-mini"
         )
     }
-
-    var confirmCallState by remember { mutableStateOf(true) }
-    var confirmSmsState by remember { mutableStateOf(true) }
-    var confirmWhatsAppState by remember { mutableStateOf(true) }
 
     // Check live permission states
     var micGranted by remember { mutableStateOf(PermissionManager.hasPermission(context, Manifest.permission.RECORD_AUDIO)) }
@@ -778,8 +780,8 @@ fun SettingsScreen(
                         Text("Prompt with dialog before dialling", color = JarvisTextMuted, fontSize = 11.sp)
                     }
                     Switch(
-                        checked = confirmCallState,
-                        onCheckedChange = { confirmCallState = it },
+                        checked = confirmCalls,
+                        onCheckedChange = onConfirmCallsChange,
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = JarvisCyanBright,
                             checkedTrackColor = JarvisCyanDark
@@ -787,7 +789,7 @@ fun SettingsScreen(
                     )
                 }
 
-                Divider(color = JarvisCardBorder, thickness = 0.5.dp)
+                HorizontalDivider(color = JarvisCardBorder, thickness = 0.5.dp)
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -799,8 +801,8 @@ fun SettingsScreen(
                         Text("Display text preview and Send button before sending", color = JarvisTextMuted, fontSize = 11.sp)
                     }
                     Switch(
-                        checked = confirmSmsState,
-                        onCheckedChange = { confirmSmsState = it },
+                        checked = confirmSms,
+                        onCheckedChange = onConfirmSmsChange,
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = JarvisCyanBright,
                             checkedTrackColor = JarvisCyanDark
@@ -808,7 +810,7 @@ fun SettingsScreen(
                     )
                 }
 
-                Divider(color = JarvisCardBorder, thickness = 0.5.dp)
+                HorizontalDivider(color = JarvisCardBorder, thickness = 0.5.dp)
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -820,8 +822,8 @@ fun SettingsScreen(
                         Text("Verify recipient and message draft before sending", color = JarvisTextMuted, fontSize = 11.sp)
                     }
                     Switch(
-                        checked = confirmWhatsAppState,
-                        onCheckedChange = { confirmWhatsAppState = it },
+                        checked = confirmWhatsApp,
+                        onCheckedChange = onConfirmWhatsAppChange,
                         colors = SwitchDefaults.colors(
                             checkedThumbColor = JarvisCyanBright,
                             checkedTrackColor = JarvisCyanDark

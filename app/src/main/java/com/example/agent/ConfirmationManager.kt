@@ -1,7 +1,12 @@
 package com.example.agent
 
+import android.content.Context
+import android.content.SharedPreferences
 import com.example.tools.RiskLevel
 import com.example.tools.Tool
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 data class ConfirmationRequest(
     val toolName: String,
@@ -13,13 +18,74 @@ data class ConfirmationRequest(
     val onCancel: () -> Unit
 )
 
-class ConfirmationManager {
+data class ConfirmationSettings(
+    val requireCallConfirmation: Boolean = true,
+    val requireSmsConfirmation: Boolean = true,
+    val confirmWhatsAppMessages: Boolean = true,
+    val confirmDestructiveActions: Boolean = true,
+    val requireMediumRiskConfirmation: Boolean = true
+)
 
-    var requireCallConfirmation: Boolean = true
-    var requireSmsConfirmation: Boolean = true
-    var confirmMessagesBeforeSending: Boolean = true
-    var confirmDestructiveActions: Boolean = true
-    var requireMediumRiskConfirmation: Boolean = true
+class ConfirmationManager(context: Context? = null) {
+
+    private val prefs: SharedPreferences? = context?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    private val _settings = MutableStateFlow(loadSettings())
+    val settings: StateFlow<ConfirmationSettings> = _settings.asStateFlow()
+
+    private fun loadSettings(): ConfirmationSettings {
+        if (prefs == null) {
+            return ConfirmationSettings()
+        }
+        return ConfirmationSettings(
+            requireCallConfirmation = prefs.getBoolean(KEY_CONFIRM_CALLS, true),
+            requireSmsConfirmation = prefs.getBoolean(KEY_CONFIRM_SMS, true),
+            confirmWhatsAppMessages = prefs.getBoolean(KEY_CONFIRM_WHATSAPP, true),
+            confirmDestructiveActions = prefs.getBoolean(KEY_CONFIRM_DESTRUCTIVE, true),
+            requireMediumRiskConfirmation = prefs.getBoolean(KEY_CONFIRM_MEDIUM_RISK, true)
+        )
+    }
+
+    var requireCallConfirmation: Boolean
+        get() = _settings.value.requireCallConfirmation
+        set(value) = setCallConfirmation(value)
+
+    var requireSmsConfirmation: Boolean
+        get() = _settings.value.requireSmsConfirmation
+        set(value) = setSmsConfirmation(value)
+
+    var confirmMessagesBeforeSending: Boolean
+        get() = _settings.value.confirmWhatsAppMessages
+        set(value) = setWhatsAppConfirmation(value)
+
+    var confirmDestructiveActions: Boolean
+        get() = _settings.value.confirmDestructiveActions
+        set(value) {
+            prefs?.edit()?.putBoolean(KEY_CONFIRM_DESTRUCTIVE, value)?.apply()
+            _settings.value = _settings.value.copy(confirmDestructiveActions = value)
+        }
+
+    var requireMediumRiskConfirmation: Boolean
+        get() = _settings.value.requireMediumRiskConfirmation
+        set(value) {
+            prefs?.edit()?.putBoolean(KEY_CONFIRM_MEDIUM_RISK, value)?.apply()
+            _settings.value = _settings.value.copy(requireMediumRiskConfirmation = value)
+        }
+
+    fun setCallConfirmation(enabled: Boolean) {
+        prefs?.edit()?.putBoolean(KEY_CONFIRM_CALLS, enabled)?.apply()
+        _settings.value = _settings.value.copy(requireCallConfirmation = enabled)
+    }
+
+    fun setSmsConfirmation(enabled: Boolean) {
+        prefs?.edit()?.putBoolean(KEY_CONFIRM_SMS, enabled)?.apply()
+        _settings.value = _settings.value.copy(requireSmsConfirmation = enabled)
+    }
+
+    fun setWhatsAppConfirmation(enabled: Boolean) {
+        prefs?.edit()?.putBoolean(KEY_CONFIRM_WHATSAPP, enabled)?.apply()
+        _settings.value = _settings.value.copy(confirmWhatsAppMessages = enabled)
+    }
 
     fun requiresConfirmation(tool: Tool, params: Map<String, Any?>): Boolean {
         if (tool.riskLevel == RiskLevel.HIGH) return true
@@ -56,5 +122,14 @@ class ConfirmationManager {
                 Pair("Confirm Action", "Do you want JARVIS to execute ${tool.name}?")
             }
         }
+    }
+
+    companion object {
+        private const val PREFS_NAME = "jarvis_confirmation_settings"
+        const val KEY_CONFIRM_CALLS = "confirm_calls"
+        const val KEY_CONFIRM_SMS = "confirm_sms"
+        const val KEY_CONFIRM_WHATSAPP = "confirm_whatsapp"
+        const val KEY_CONFIRM_DESTRUCTIVE = "confirm_destructive"
+        const val KEY_CONFIRM_MEDIUM_RISK = "confirm_medium_risk"
     }
 }
