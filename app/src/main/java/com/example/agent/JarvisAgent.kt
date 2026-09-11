@@ -28,11 +28,13 @@ class JarvisAgent(
     val toolRegistry: ToolRegistry,
     val confirmationManager: ConfirmationManager,
     var aiProvider: AIProvider,
-    private val conversationRepository: ConversationRepository
+    private val conversationRepository: ConversationRepository,
+    var voiceSettingsManager: com.example.voice.VoiceSettingsManager? = null
 ) {
 
     suspend fun executeCommand(
         rawCommand: String,
+        languageInstruction: String? = null,
         onStateChange: (AgentExecutionState) -> Unit,
         onFinished: (response: String, toolResult: ToolResult?) -> Unit
     ) = withContext(Dispatchers.Main) {
@@ -53,9 +55,18 @@ class JarvisAgent(
             )
         }
 
+        val activeLanguageInstruction = languageInstruction
+            ?: voiceSettingsManager?.getCurrentAiInstruction()
+
         // Call AI Provider (Remote Gemini or Local Rule Fallback)
         val aiResponse = withContext(Dispatchers.IO) {
-            aiProvider.processCommand(AIRequest(prompt = rawCommand, tools = toolInfos))
+            aiProvider.processCommand(
+                AIRequest(
+                    prompt = rawCommand,
+                    tools = toolInfos,
+                    languageInstruction = activeLanguageInstruction
+                )
+            )
         }
 
         val invocation = aiResponse.toolInvocation

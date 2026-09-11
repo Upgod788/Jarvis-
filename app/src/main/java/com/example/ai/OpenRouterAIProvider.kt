@@ -111,7 +111,7 @@ class OpenRouterAIProvider(
                 ?: AIResponse(textResponse = "OpenRouter API key is not configured. Please enter your key in Settings.")
         }
 
-        val systemPrompt = buildSystemPrompt(request.tools)
+        val systemPrompt = buildSystemPrompt(request.tools, request.languageInstruction)
         try {
             val messagesArray = JSONArray().apply {
                 // System message
@@ -180,11 +180,15 @@ class OpenRouterAIProvider(
         }
     }
 
-    private fun buildSystemPrompt(tools: List<ToolInfo>): String {
+    private fun buildSystemPrompt(tools: List<ToolInfo>, languageInstruction: String? = null): String {
+        val langBlock = if (!languageInstruction.isNullOrBlank()) {
+            "\nCRITICAL RESPONSE LANGUAGE REQUIREMENT:\n$languageInstruction\nYou MUST formulate all spoken conversational replies, explanations, and 'response' text strictly following this language requirement.\n"
+        } else ""
+
         return """
         You are JARVIS, a personal Android assistant.
         You listen to recognized speech or text commands and choose the safest available tool or respond conversationally.
-        
+        $langBlock
         Rules:
         1. Understand natural commands in English, Hindi, and Hinglish.
         2. If the user wants to perform an action matching a registered tool below, respond in Format A or embed intent tags (e.g. [INTENT: TOGGLE_WIFI] or [INTENT: OPEN_APP app="..."]) in Format B.

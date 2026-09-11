@@ -26,10 +26,19 @@ class JarvisApplication : Application() {
     lateinit var toolRegistry: ToolRegistry
         private set
 
+    lateinit var deviceManager: com.example.devices.DeviceManager
+        private set
+
+    lateinit var routineManager: com.example.routines.RoutineManager
+        private set
+
     lateinit var confirmationManager: ConfirmationManager
         private set
 
     lateinit var themeManager: com.example.ui.theme.ThemeManager
+        private set
+
+    lateinit var voiceSettingsManager: com.example.voice.VoiceSettingsManager
         private set
 
     lateinit var aiProvider: DynamicAIProvider
@@ -52,12 +61,15 @@ class JarvisApplication : Application() {
         database = JarvisDatabase.getInstance(this)
         memoryRepository = MemoryRepository(database.memoryDao())
         conversationRepository = ConversationRepository(database.conversationDao())
-        toolRegistry = ToolRegistry(memoryRepository)
+        deviceManager = com.example.devices.DeviceManager(this)
+        routineManager = com.example.routines.RoutineManager(this) { toolRegistry }
+        toolRegistry = ToolRegistry(memoryRepository, deviceManager, routineManager)
         confirmationManager = ConfirmationManager(this)
         themeManager = com.example.ui.theme.ThemeManager(this)
+        voiceSettingsManager = com.example.voice.VoiceSettingsManager(this)
         aiProvider = DynamicAIProvider(this)
-        speechRecognizerManager = SpeechRecognizerManager(this)
-        textToSpeechManager = TextToSpeechManager(this)
+        speechRecognizerManager = SpeechRecognizerManager(this, voiceSettingsManager)
+        textToSpeechManager = TextToSpeechManager(this, voiceSettingsManager)
         wakeWordManager = WakeWordManager()
 
         agent = JarvisAgent(
@@ -65,7 +77,8 @@ class JarvisApplication : Application() {
             toolRegistry = toolRegistry,
             confirmationManager = confirmationManager,
             aiProvider = aiProvider,
-            conversationRepository = conversationRepository
+            conversationRepository = conversationRepository,
+            voiceSettingsManager = voiceSettingsManager
         )
     }
 

@@ -26,11 +26,9 @@ class LocalRuleAIProvider : AIProvider {
         }
 
         // 1.5 Wi-Fi Toggle & Controls
-        if (normalized.contains("toggle wifi") || normalized.contains("turn on wifi") ||
-            normalized.contains("turn off wifi") || normalized == "wifi on" || normalized == "wifi off" ||
-            normalized.contains("wifi on karo") || normalized.contains("wifi off karo") ||
-            normalized.contains("wifi chalu") || normalized.contains("wifi band") ||
-            normalized.contains("enable wifi") || normalized.contains("disable wifi")) {
+        val isWifi = normalized.contains("wifi") || normalized.contains("wi-fi")
+        if (isWifi && (normalized.contains("on") || normalized.contains("off") || normalized.contains("toggle") ||
+            normalized.contains("chalu") || normalized.contains("band") || normalized.contains("enable") || normalized.contains("disable"))) {
             val action = if (normalized.contains("off") || normalized.contains("band") || normalized.contains("disable")) "off"
             else if (normalized.contains("on") || normalized.contains("chalu") || normalized.contains("enable")) "on"
             else "toggle"
@@ -38,11 +36,9 @@ class LocalRuleAIProvider : AIProvider {
         }
 
         // 1.6 Bluetooth Toggle & Controls
-        if (normalized.contains("toggle bluetooth") || normalized.contains("turn on bluetooth") ||
-            normalized.contains("turn off bluetooth") || normalized == "bluetooth on" || normalized == "bluetooth off" ||
-            normalized.contains("bluetooth on karo") || normalized.contains("bluetooth off karo") ||
-            normalized.contains("bluetooth chalu") || normalized.contains("bluetooth band") ||
-            normalized.contains("enable bluetooth") || normalized.contains("disable bluetooth")) {
+        val isBt = normalized.contains("bluetooth")
+        if (isBt && (normalized.contains("on") || normalized.contains("off") || normalized.contains("toggle") ||
+            normalized.contains("chalu") || normalized.contains("band") || normalized.contains("enable") || normalized.contains("disable"))) {
             val action = if (normalized.contains("off") || normalized.contains("band") || normalized.contains("disable")) "off"
             else if (normalized.contains("on") || normalized.contains("chalu") || normalized.contains("enable")) "on"
             else "toggle"
@@ -225,9 +221,7 @@ class LocalRuleAIProvider : AIProvider {
         }
 
         // 14. Notifications
-        if (normalized.contains("read my notifications") || normalized.contains("recent notification") ||
-            normalized.contains("show notifications") || normalized.contains("notifications dikhao") ||
-            normalized.contains("meri notifications dikhao")) {
+        if (normalized.contains("notification")) {
             val pkg = if (normalized.contains("whatsapp")) "whatsapp" else ""
             return AIResponse("Checking notifications.", ToolInvocation("NotificationTool", if (pkg.isNotBlank()) mapOf("appName" to pkg) else emptyMap()))
         }
@@ -280,6 +274,99 @@ class LocalRuleAIProvider : AIProvider {
                 "action" to "recall",
                 "key" to key
             )))
+        }
+
+        // Routines: "activate movie mode", "activate good night", "activate work focus"
+        if (normalized.contains("activate movie mode") || normalized == "movie mode") {
+            return AIResponse("Activating Movie Mode.", ToolInvocation("RoutineTool", mapOf("routineName" to "movie mode")))
+        }
+        if (normalized.contains("activate good night") || normalized == "good night") {
+            return AIResponse("Activating Good Night routine.", ToolInvocation("RoutineTool", mapOf("routineName" to "good night")))
+        }
+        if (normalized.contains("activate work focus") || normalized == "work focus") {
+            return AIResponse("Activating Work Focus routine.", ToolInvocation("RoutineTool", mapOf("routineName" to "work focus")))
+        }
+
+        // PC Control: "lock pc", "show pc battery", "open chrome on pc", "play music on pc"
+        if (normalized.contains("lock pc") || normalized.contains("lock my pc")) {
+            return AIResponse("Locking your PC.", ToolInvocation("PcControlTool", mapOf("action" to "lock")))
+        }
+        if (normalized.contains("show pc battery") || normalized.contains("pc battery")) {
+            return AIResponse("Checking PC battery.", ToolInvocation("PcControlTool", mapOf("action" to "battery")))
+        }
+        if (normalized.contains("open chrome on pc")) {
+            return AIResponse("Opening Chrome on your PC.", ToolInvocation("PcControlTool", mapOf("action" to "open_app", "appName" to "Chrome")))
+        }
+        if (normalized.contains("play music on pc")) {
+            return AIResponse("Playing music on your PC.", ToolInvocation("PcControlTool", mapOf("action" to "play_music")))
+        }
+
+        // Smart Home Devices: "turn on bedroom light", "turn off tv", "set living room light to 30 percent", "show connected devices"
+        if (normalized.contains("show connected devices") || normalized.contains("what devices")) {
+            return AIResponse("Checking connected devices.", ToolInvocation("SmartDeviceTool", mapOf("action" to "query_devices")))
+        }
+        val turnDeviceMatch = Regex("turn\\s+(on|off)\\s+(.*)", RegexOption.IGNORE_CASE).find(normalized)
+        if (turnDeviceMatch != null && !normalized.contains("flashlight")) {
+            val st = turnDeviceMatch.groupValues[1]
+            val dev = turnDeviceMatch.groupValues[2].trim()
+            return AIResponse("Turning $st $dev.", ToolInvocation("SmartDeviceTool", mapOf("deviceName" to dev, "action" to "power", "state" to st)))
+        }
+        val setDimMatch = Regex("set\\s+(.*?)\\s+(?:light\\s+)?to\\s+(\\d+)\\s*(?:percent)?", RegexOption.IGNORE_CASE).find(normalized)
+        if (setDimMatch != null && !normalized.contains("volume")) {
+            val dev = setDimMatch.groupValues[1].trim() + " light"
+            val pct = setDimMatch.groupValues[2]
+            return AIResponse("Setting $dev brightness to $pct%.", ToolInvocation("SmartDeviceTool", mapOf("deviceName" to dev, "action" to "brightness", "state" to pct)))
+        }
+
+        // Media Controls: "play music", "pause music", "next track", "previous track", "set volume to 50 percent", "increase volume", "decrease volume"
+        if (normalized == "play music") {
+            return AIResponse("Resuming music.", ToolInvocation("MediaControlTool", mapOf("action" to "play")))
+        }
+        if (normalized == "pause music" || normalized == "pause") {
+            return AIResponse("Pausing music.", ToolInvocation("MediaControlTool", mapOf("action" to "pause")))
+        }
+        if (normalized == "next track") {
+            return AIResponse("Skipping to next track.", ToolInvocation("MediaControlTool", mapOf("action" to "next")))
+        }
+        if (normalized == "previous track") {
+            return AIResponse("Playing previous track.", ToolInvocation("MediaControlTool", mapOf("action" to "previous")))
+        }
+        val volSetMatch = Regex("set\\s+volume\\s+to\\s+(\\d+)\\s*(?:percent)?", RegexOption.IGNORE_CASE).find(normalized)
+        if (volSetMatch != null) {
+            val vol = volSetMatch.groupValues[1]
+            return AIResponse("Setting volume to $vol%.", ToolInvocation("MediaControlTool", mapOf("action" to "set_volume", "level" to vol)))
+        }
+        if (normalized == "increase volume") {
+            return AIResponse("Increasing volume.", ToolInvocation("MediaControlTool", mapOf("action" to "volume_up")))
+        }
+        if (normalized == "decrease volume") {
+            return AIResponse("Decreasing volume.", ToolInvocation("MediaControlTool", mapOf("action" to "volume_down")))
+        }
+
+        // Navigation: "navigate to nearest petrol pump", "navigate to nearest hospital", "navigate to home", "navigate to delhi"
+        val navMatch = Regex("navigate\\s+to\\s+(.*)", RegexOption.IGNORE_CASE).find(normalized)
+        if (navMatch != null) {
+            val dest = navMatch.groupValues[1].trim()
+            return AIResponse("Navigating to $dest.", ToolInvocation("NavigationTool", mapOf("destination" to dest)))
+        }
+        if (normalized == "what is my location") {
+            return AIResponse("Checking your current location.", ToolInvocation("DeviceInfoTool", mapOf("queryType" to "location")))
+        }
+
+        // Files: "open downloads folder", "view pdf files"
+        if (normalized.contains("open downloads folder")) {
+            return AIResponse("Opening Downloads folder.", ToolInvocation("FileTool", mapOf("action" to "open_downloads")))
+        }
+        if (normalized.contains("view pdf files")) {
+            return AIResponse("Opening documents.", ToolInvocation("FileTool", mapOf("action" to "view_documents")))
+        }
+
+        // Calendar: "view calendar agenda", "add meeting to calendar"
+        if (normalized.contains("view calendar agenda")) {
+            return AIResponse("Opening calendar agenda.", ToolInvocation("CalendarTool", mapOf("action" to "view_calendar")))
+        }
+        if (normalized.contains("add meeting to calendar")) {
+            return AIResponse("Adding meeting to calendar.", ToolInvocation("CalendarTool", mapOf("action" to "add_event", "title" to "Meeting")))
         }
 
         // 15. Open App: "open youtube", "open whatsapp", "open chrome", "open settings"

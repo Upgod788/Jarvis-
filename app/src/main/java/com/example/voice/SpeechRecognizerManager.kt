@@ -1,7 +1,12 @@
 package com.example.voice
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -10,6 +15,7 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.util.Log
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -47,10 +53,18 @@ sealed interface SpeechEvent {
 
 /**
  * Robust, thread-safe manager for Android's [SpeechRecognizer] API.
- * Captures user voice input through the device microphone and converts it
- * into actionable text strings with real-time partial feedback and decibel analysis.
+ * Features:
+ * - Direct language tag integration from [VoiceSettingsManager]
+ * - Audio focus management during recording
+ * - Pre-execution RECORD_AUDIO permission safety checks
+ * - Concurrent session collision prevention
+ * - Partial and final result buffering
+ * - Infinite retry loop avoidance
  */
-class SpeechRecognizerManager(private val context: Context) {
+class SpeechRecognizerManager(
+    private val context: Context,
+    val voiceSettingsManager: VoiceSettingsManager? = null
+) {
 
     companion object {
         private const val TAG = "SpeechRecognizerManager"
@@ -66,6 +80,9 @@ class SpeechRecognizerManager(private val context: Context) {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var speechRecognizer: SpeechRecognizer? = null
 
+    private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+    private var audioFocusRequest: AudioFocusRequest? = null
+
     private val _isListening = MutableStateFlow(false)
     val isListening: StateFlow<Boolean> = _isListening.asStateFlow()
 
@@ -79,37 +96,65 @@ class SpeechRecognizerManager(private val context: Context) {
      * Checks whether speech recognition services are supported and installed on this device.
      */
     fun isAvailable(): Boolean {
-        return SpeechRecognizer.isRecognitionAvailable(context)
+        return try {
+            SpeechRecognizer.isRecognitionAvailable(context)
+        } catch (e: Exception) {
+            false
+        }
     }
 
     /**
      * Initiates voice recognition on the main thread.
      *
-     * @param language BCP-47 language tag (e.g., "en-US", "en-IN", "hi-IN").
+     * @param language Optional BCP-47 language tag (e.g., "hi-IN", "en-US"). If null, uses the active language from VoiceSettingsManager.
      * @param onEvent Callback receiving speech recognition lifecycle events.
      */
     fun startListening(
-        language: String = Locale.getDefault().toLanguageTag(),
+        language: String? = null,
         onEvent: (SpeechEvent) -> Unit
     ) {
         mainHandler.post {
             // Clean up any existing session prior to creating a new one
             cleanupInternal()
 
+            // 1. Verify Audio Permission
+            val hasPermission = ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.RECORD_AUDIO
+            ) == PackageManager.PERMISSION_GRANTED
+
+            if (!hasPermission) {
+                Log.w(TAG, "RECORD_AUDIO permission is not granted.")
+                onEvent(
+                    SpeechEvent.Error(
+                        "Microphone permission is required to listen.",
+                        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS
+                    )
+                )
+                return@post
+            }
+
+            // 2. Verify SpeechRecognizer availability
             if (!isAvailable()) {
                 Log.w(TAG, "SpeechRecognizer is not available on this device.")
                 onEvent(SpeechEvent.Error("Speech recognition is not available on this device.", -1))
                 return@post
             }
 
-            try {
-                // Use standard Android SpeechRecognizer for robust online and offline speech processing
-                val recognizer = SpeechRecognizer.createSpeechRecognizer(context)
+            // 3. Resolve active recognition language
+            val activeLang = voiceSettingsManager?.getCurrentLanguage()
+            val resolvedLangTag = language?.ifBlank { null }
+                ?: activeLang?.sttLanguageTag
+                ?: Locale.getDefault().toLanguageTag()
 
+            try {
+                requestAudioFocus()
+
+                val recognizer = SpeechRecognizer.createSpeechRecognizer(context)
                 speechRecognizer = recognizer.apply {
                     setRecognitionListener(object : RecognitionListener {
                         override fun onReadyForSpeech(params: Bundle?) {
-                            Log.d(TAG, "SpeechRecognizer ready for speech")
+                            Log.d(TAG, "SpeechRecognizer ready for speech (lang: $resolvedLangTag)")
                             _isListening.value = true
                             _lastRecognizedText.value = ""
                             onEvent(SpeechEvent.Ready)
@@ -121,7 +166,6 @@ class SpeechRecognizerManager(private val context: Context) {
                         }
 
                         override fun onRmsChanged(rmsdB: Float) {
-                            // Normalize RMS dB into 0.0..1.0
                             val clamped = rmsdB.coerceIn(0f, 10f)
                             val normalized = clamped / 10f
                             _rmsLevel.value = normalized
@@ -141,10 +185,9 @@ class SpeechRecognizerManager(private val context: Context) {
                             Log.w(TAG, "SpeechRecognizer error code: $error")
                             _isListening.value = false
                             _rmsLevel.value = 0f
+                            releaseAudioFocus()
 
-                            // Resilience Recovery:
-                            // If the user already spoke words captured in partial results,
-                            // don't drop the command on trailing silence or disconnect!
+                            // If partial speech was captured, deliver it instead of failing on silence timeout
                             val partialCaptured = _lastRecognizedText.value.trim()
                             if (partialCaptured.isNotBlank() && partialCaptured.length >= 2) {
                                 Log.i(TAG, "Recovered speech command from partial transcript: \"$partialCaptured\" despite error $error")
@@ -165,15 +208,13 @@ class SpeechRecognizerManager(private val context: Context) {
                                 SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No speech detected. Tap the mic and speak."
                                 ERROR_TOO_MANY_REQUESTS -> "Too many voice requests. Please try again shortly."
                                 ERROR_SERVER_DISCONNECTED -> "Voice connection reset. Tap to speak again."
-                                ERROR_LANGUAGE_NOT_SUPPORTED -> "Selected language not supported on device."
+                                ERROR_LANGUAGE_NOT_SUPPORTED -> "Selected language ($resolvedLangTag) not supported on device."
                                 ERROR_LANGUAGE_UNAVAILABLE -> "Selected language is currently unavailable."
                                 ERROR_CANNOT_CHECK_SUPPORT -> "Unable to verify speech recognizer status."
                                 else -> "Speech recognition notice ($error)"
                             }
 
                             onEvent(SpeechEvent.Error(errorMsg, error))
-
-                            // Always clean up internal session on error to prevent dangling connections
                             cleanupInternal()
                         }
 
@@ -181,6 +222,7 @@ class SpeechRecognizerManager(private val context: Context) {
                             Log.d(TAG, "SpeechRecognizer results received")
                             _isListening.value = false
                             _rmsLevel.value = 0f
+                            releaseAudioFocus()
 
                             val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                             val scores = results?.getFloatArray(SpeechRecognizer.CONFIDENCE_SCORES)
@@ -205,7 +247,6 @@ class SpeechRecognizerManager(private val context: Context) {
                                 onEvent(SpeechEvent.Error("No clear speech heard.", SpeechRecognizer.ERROR_NO_MATCH))
                             }
 
-                            // Clean up session resources after results are processed
                             cleanupInternal()
                         }
 
@@ -224,24 +265,20 @@ class SpeechRecognizerManager(private val context: Context) {
 
                 val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, language)
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, language)
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, resolvedLangTag)
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, resolvedLangTag)
                     putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                     putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
                     putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
 
-                    // Multilingual support: recognize Hindi, Indian English, and US English smoothly
-                    val additionalLangs = when (language) {
-                        "hi-IN" -> arrayOf("hi-IN", "en-IN", "en-US")
-                        "en-IN" -> arrayOf("en-IN", "hi-IN", "en-US")
-                        else -> arrayOf("en-US", "en-IN", "hi-IN")
-                    }
+                    // Multilingual additional language support tailored to the chosen language
+                    val additionalLangs = activeLang?.additionalLangs ?: arrayOf("en-US", "en-IN", "hi-IN")
                     putExtra("android.speech.extra.ADDITIONAL_LANGUAGES", additionalLangs)
 
-                    // Generous silence thresholds so natural pauses do not immediately cause timeouts
-                    putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 4000L)
-                    putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 3000L)
-                    putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 3000L)
+                    // Generous silence thresholds for natural pausing
+                    putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 3500L)
+                    putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2500L)
+                    putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 2000L)
                 }
 
                 speechRecognizer?.startListening(intent)
@@ -249,8 +286,9 @@ class SpeechRecognizerManager(private val context: Context) {
                 Log.e(TAG, "Failed to start speech recognizer", e)
                 _isListening.value = false
                 _rmsLevel.value = 0f
+                releaseAudioFocus()
                 cleanupInternal()
-                onEvent(SpeechEvent.Error("Failed to initialize speech recognizer: ${e.localizedMessage}", -1))
+                onEvent(SpeechEvent.Error("Failed to start speech recognition: ${e.localizedMessage}", -1))
             }
         }
     }
@@ -267,6 +305,7 @@ class SpeechRecognizerManager(private val context: Context) {
             } finally {
                 _isListening.value = false
                 _rmsLevel.value = 0f
+                releaseAudioFocus()
             }
         }
     }
@@ -291,6 +330,47 @@ class SpeechRecognizerManager(private val context: Context) {
             speechRecognizer = null
             _isListening.value = false
             _rmsLevel.value = 0f
+            releaseAudioFocus()
+        }
+    }
+
+    private fun requestAudioFocus() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                if (audioFocusRequest == null) {
+                    val attributes = AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build()
+                    audioFocusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
+                        .setAudioAttributes(attributes)
+                        .setOnAudioFocusChangeListener { /* handle focus changes */ }
+                        .build()
+                }
+                audioFocusRequest?.let { audioManager?.requestAudioFocus(it) }
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager?.requestAudioFocus(
+                    null,
+                    AudioManager.STREAM_MUSIC,
+                    AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error acquiring audio focus for recording", e)
+        }
+    }
+
+    private fun releaseAudioFocus() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                audioFocusRequest?.let { audioManager?.abandonAudioFocusRequest(it) }
+            } else {
+                @Suppress("DEPRECATION")
+                audioManager?.abandonAudioFocus(null)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error releasing audio focus for recording", e)
         }
     }
 }

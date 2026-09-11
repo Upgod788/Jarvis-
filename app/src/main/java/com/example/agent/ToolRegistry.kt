@@ -1,9 +1,15 @@
 package com.example.agent
 
+import com.example.devices.DeviceManager
 import com.example.memory.MemoryRepository
+import com.example.routines.RoutineManager
 import com.example.tools.*
 
-class ToolRegistry(memoryRepository: MemoryRepository) {
+class ToolRegistry(
+    memoryRepository: MemoryRepository,
+    deviceManager: DeviceManager? = null,
+    routineManager: RoutineManager? = null
+) {
 
     private val tools = mutableMapOf<String, Tool>()
 
@@ -31,6 +37,18 @@ class ToolRegistry(memoryRepository: MemoryRepository) {
         register(YouTubeTool())
         register(BrowserTool())
         register(AppAutomationTool())
+        register(MediaControlTool())
+        register(NavigationTool())
+        register(CalendarTool())
+        register(FileTool())
+
+        if (deviceManager != null) {
+            register(SmartDeviceTool(deviceManager))
+            register(PcControlTool(deviceManager))
+        }
+        if (routineManager != null) {
+            register(RoutineTool(routineManager))
+        }
     }
 
     fun register(tool: Tool) {

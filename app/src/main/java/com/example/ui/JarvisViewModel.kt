@@ -42,6 +42,15 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
 
     val confirmationSettings: StateFlow<com.example.agent.ConfirmationSettings> = app.confirmationManager.settings
 
+    val voiceSettings: StateFlow<com.example.voice.VoiceSettings> = app.voiceSettingsManager.settings
+    val availableVoices: StateFlow<List<com.example.voice.VoiceOption>> = app.voiceSettingsManager.availableVoices
+
+    val deviceManager = app.deviceManager
+    val devices: StateFlow<List<com.example.devices.Device>> = deviceManager.devices
+
+    val routineManager = app.routineManager
+    val routines: StateFlow<List<com.example.routines.Routine>> = routineManager.routines
+
     fun setThemeMode(mode: com.example.ui.theme.ThemeMode) {
         app.themeManager.setThemeMode(mode)
     }
@@ -96,11 +105,7 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
             pendingConfirmation = null
         )
 
-        val recognitionLanguage = when (tts.preferredLanguage) {
-            "hi" -> "hi-IN"
-            "en-in" -> "en-IN"
-            else -> "en-US"
-        }
+        val recognitionLanguage = app.voiceSettingsManager.getCurrentSttLanguageTag()
 
         speechRecognizer.startListening(
             language = recognitionLanguage
@@ -320,19 +325,34 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
+    fun setVoiceLanguage(langCode: String) {
+        tts.stop()
+        app.voiceSettingsManager.setLanguage(langCode)
+        tts.refreshAvailableVoices()
+        tts.applyVoiceSettings()
+    }
+
+    fun setVoice(voiceId: String) {
+        app.voiceSettingsManager.setVoice(voiceId)
+        tts.applyVoiceSettings()
+    }
+
     fun setSpeechRate(rate: Float) {
-        tts.speechRate = rate
-        tts.updateLanguageAndPitch()
+        app.voiceSettingsManager.setSpeechRate(rate)
+        tts.applyVoiceSettings()
     }
 
     fun setPitch(pitch: Float) {
-        tts.pitch = pitch
-        tts.updateLanguageAndPitch()
+        app.voiceSettingsManager.setPitch(pitch)
+        tts.applyVoiceSettings()
+    }
+
+    fun testVoice() {
+        tts.testVoice()
     }
 
     fun setPreferredLanguage(lang: String) {
-        tts.preferredLanguage = lang
-        tts.updateLanguageAndPitch()
+        setVoiceLanguage(lang)
     }
 
     fun updateCustomApiKey(key: String) {
@@ -353,6 +373,60 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
 
     fun clearMissingPermissions() {
         _uiState.value = _uiState.value.copy(missingPermissions = emptyList())
+    }
+
+    fun runRoutine(routineId: String) {
+        viewModelScope.launch {
+            val result = routineManager.executeRoutine(routineId)
+            _uiState.value = _uiState.value.copy(
+                assistantResponse = result.message,
+                activeToolResult = result
+            )
+        }
+    }
+
+    fun toggleRoutine(routineId: String) {
+        routineManager.toggleRoutine(routineId)
+    }
+
+    fun saveRoutine(routine: com.example.routines.Routine) {
+        routineManager.saveRoutine(routine)
+    }
+
+    fun deleteRoutine(routineId: String) {
+        routineManager.deleteRoutine(routineId)
+    }
+
+    fun triggerDeviceAction(deviceId: String, command: String, params: Map<String, Any?> = emptyMap()) {
+        viewModelScope.launch {
+            val result = deviceManager.executeDeviceCommand(deviceId, command, params)
+            _uiState.value = _uiState.value.copy(
+                assistantResponse = result.message,
+                activeToolResult = result
+            )
+        }
+    }
+
+    fun authorizeDevice(deviceId: String, token: String): Boolean {
+        return deviceManager.authorizeDevice(deviceId, token)
+    }
+
+    fun addManualDevice(
+        name: String,
+        type: com.example.devices.DeviceType,
+        manufacturer: String,
+        conn: com.example.devices.ConnectionType,
+        room: String
+    ) {
+        deviceManager.addManualDevice(name, type, manufacturer, conn, room)
+    }
+
+    fun removeDevice(deviceId: String) {
+        deviceManager.registry.removeDevice(deviceId)
+    }
+
+    fun renameDevice(deviceId: String, newName: String) {
+        deviceManager.registry.renameDevice(deviceId, newName)
     }
 
     override fun onCleared() {

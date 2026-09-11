@@ -78,6 +78,47 @@ class JarvisAccessibilityService : AccessibilityService() {
         }
     }
 
+    fun performBackAction(): Boolean {
+        return performGlobalAction(GLOBAL_ACTION_BACK)
+    }
+
+    fun scrollForward(): Boolean {
+        val root = rootInActiveWindow ?: return false
+        return findScrollableNode(root)?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD) ?: false
+    }
+
+    fun scrollBackward(): Boolean {
+        val root = rootInActiveWindow ?: return false
+        return findScrollableNode(root)?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD) ?: false
+    }
+
+    private fun findScrollableNode(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+        if (node == null) return null
+        if (node.isScrollable) return node
+        for (i in 0 until node.childCount) {
+            val found = findScrollableNode(node.getChild(i))
+            if (found != null) return found
+        }
+        return null
+    }
+
+    fun clickFirstEditable(): Boolean {
+        val root = rootInActiveWindow ?: return false
+        val editable = findFirstEditableNode(root) ?: return false
+        return editable.performAction(AccessibilityNodeInfo.ACTION_CLICK) ||
+               editable.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+    }
+
+    private fun findFirstEditableNode(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+        if (node == null) return null
+        if (node.isEditable) return node
+        for (i in 0 until node.childCount) {
+            val found = findFirstEditableNode(node.getChild(i))
+            if (found != null) return found
+        }
+        return null
+    }
+
     companion object {
         @Volatile
         var instance: JarvisAccessibilityService? = null

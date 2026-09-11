@@ -7,6 +7,7 @@ import android.net.Uri
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -39,6 +40,8 @@ import com.example.permissions.PermissionManager
 import com.example.services.JarvisAccessibilityService
 import com.example.services.JarvisNotificationListenerService
 import com.example.ui.theme.*
+import com.example.voice.VoiceLanguageRegistry
+import com.example.voice.VoiceOption
 import kotlinx.coroutines.launch
 
 @Composable
@@ -46,12 +49,16 @@ fun SettingsScreen(
     speechRate: Float,
     pitch: Float,
     preferredLanguage: String,
+    selectedVoiceId: String = "default",
+    availableVoices: List<VoiceOption> = emptyList(),
     aiSettings: AISettings = AISettings(),
     themeMode: ThemeMode = ThemeMode.DARK,
     onThemeModeChange: (ThemeMode) -> Unit = {},
     onSpeechRateChange: (Float) -> Unit,
     onPitchChange: (Float) -> Unit,
     onLanguageChange: (String) -> Unit,
+    onVoiceChange: (String) -> Unit = {},
+    onTestVoice: () -> Unit = {},
     onSelectProvider: (AIProviderType) -> Unit = {},
     onUpdateApiKey: (String) -> Unit,
     onUpdateOpenRouterConfig: (apiKey: String, model: String) -> Unit = { _, _ -> },
@@ -270,32 +277,253 @@ fun SettingsScreen(
         }
 
         // 1. GENERAL / SPEECH SYNTHESIS
+        val currentLang = VoiceLanguageRegistry.findByCode(preferredLanguage)
+        val selectedVoice = availableVoices.find { it.id == selectedVoiceId }
+            ?: availableVoices.firstOrNull()
+            ?: VoiceOption("default", "Default (${currentLang.displayName})", currentLang.sttLanguageTag)
+
+        var isLanguageMenuExpanded by remember { mutableStateOf(false) }
+        var isVoiceMenuExpanded by remember { mutableStateOf(false) }
+
         SettingsSectionCard(title = "Voice & Speech Synthesis", icon = Icons.Default.RecordVoiceOver) {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                // Language selection
-                Text("Assistant Language", color = JarvisTextSecondary, fontSize = 13.sp)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    LanguageChip(
-                        label = "English (US)",
-                        selected = preferredLanguage == "en",
-                        onClick = { onLanguageChange("en") }
-                    )
-                    LanguageChip(
-                        label = "English (India)",
-                        selected = preferredLanguage == "en-in",
-                        onClick = { onLanguageChange("en-in") }
-                    )
-                    LanguageChip(
-                        label = "Hindi (हिन्दी)",
-                        selected = preferredLanguage == "hi",
-                        onClick = { onLanguageChange("hi") }
-                    )
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                // Section Description
+                Text(
+                    text = "Configure voice synthesis, recognition language, and spoken responses. Language selection controls Speech-to-Text, Voice output, and AI reply phrasing.",
+                    color = JarvisTextSecondary,
+                    fontSize = 12.sp,
+                    lineHeight = 17.sp
+                )
+
+                // 1. Assistant Language Selection
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Assistant Language", color = JarvisTextSecondary, fontSize = 13.sp)
+                        Surface(
+                            shape = RoundedCornerShape(4.dp),
+                            color = JarvisCyanPrimary.copy(alpha = 0.15f)
+                        ) {
+                            Text(
+                                text = "Locale: ${currentLang.sttLanguageTag}",
+                                color = JarvisCyanBright,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+
+                    // Dropdown selector container
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .border(1.dp, JarvisCyanPrimary.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+                                .clickable { isLanguageMenuExpanded = true }
+                                .testTag("language_selector_button"),
+                            color = JarvisCardSurface
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        text = "${currentLang.displayName} (${currentLang.nativeName})",
+                                        color = JarvisCyanBright,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "STT Tag: ${currentLang.sttLanguageTag} • ${if (currentLang.code == "hinglish") "Multilingual" else "Direct Mode"}",
+                                        color = JarvisTextMuted,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                                Icon(
+                                    imageVector = Icons.Default.ArrowDropDown,
+                                    contentDescription = "Select Language",
+                                    tint = JarvisCyanPrimary
+                                )
+                            }
+                        }
+
+                        DropdownMenu(
+                            expanded = isLanguageMenuExpanded,
+                            onDismissRequest = { isLanguageMenuExpanded = false },
+                            modifier = Modifier
+                                .background(JarvisDarkSurface)
+                                .border(1.dp, JarvisCardBorder, RoundedCornerShape(8.dp))
+                                .fillMaxWidth(0.9f)
+                        ) {
+                            VoiceLanguageRegistry.allLanguages.forEach { lang ->
+                                val isSelected = lang.code == currentLang.code
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text(
+                                                text = "${lang.displayName} • ${lang.nativeName}",
+                                                color = if (isSelected) JarvisCyanBright else JarvisTextPrimary,
+                                                fontSize = 13.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                            )
+                                            Text(
+                                                text = "BCP-47: ${lang.sttLanguageTag}",
+                                                color = if (isSelected) JarvisCyanPrimary else JarvisTextMuted,
+                                                fontSize = 10.sp
+                                            )
+                                        }
+                                    },
+                                    onClick = {
+                                        onLanguageChange(lang.code)
+                                        isLanguageMenuExpanded = false
+                                    },
+                                    leadingIcon = {
+                                        if (isSelected) {
+                                            Icon(Icons.Default.Check, contentDescription = "Selected", tint = JarvisCyanBright)
+                                        } else {
+                                            Icon(Icons.Default.Translate, contentDescription = null, tint = JarvisTextMuted)
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    // Quick Chips for common choices
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        LanguageChip(
+                            label = "English (US)",
+                            selected = preferredLanguage == "en",
+                            onClick = { onLanguageChange("en") }
+                        )
+                        LanguageChip(
+                            label = "India (EN)",
+                            selected = preferredLanguage == "en-in",
+                            onClick = { onLanguageChange("en-in") }
+                        )
+                        LanguageChip(
+                            label = "Hindi (हिन्दी)",
+                            selected = preferredLanguage == "hi",
+                            onClick = { onLanguageChange("hi") }
+                        )
+                        LanguageChip(
+                            label = "Hinglish",
+                            selected = preferredLanguage == "hinglish",
+                            onClick = { onLanguageChange("hinglish") }
+                        )
+                    }
                 }
 
-                // Speech Speed Slider
+                // 2. Assistant Voice Selection
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("TTS Voice", color = JarvisTextSecondary, fontSize = 13.sp)
+                        Text(
+                            text = "${availableVoices.size} compatible voice(s)",
+                            color = JarvisTextMuted,
+                            fontSize = 11.sp
+                        )
+                    }
+
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .border(1.dp, JarvisCardBorder, RoundedCornerShape(10.dp))
+                                .clickable { isVoiceMenuExpanded = true }
+                                .testTag("voice_selector_button"),
+                            color = JarvisCardSurface
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        text = selectedVoice.displayName,
+                                        color = JarvisTextPrimary,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    Text(
+                                        text = if (selectedVoice.id == "default") "Engine Default Voice" else "Voice ID: ${selectedVoice.id}",
+                                        color = JarvisTextMuted,
+                                        fontSize = 10.sp
+                                    )
+                                }
+                                Icon(
+                                    imageVector = Icons.Default.ArrowDropDown,
+                                    contentDescription = "Select Voice",
+                                    tint = JarvisTextSecondary
+                                )
+                            }
+                        }
+
+                        DropdownMenu(
+                            expanded = isVoiceMenuExpanded,
+                            onDismissRequest = { isVoiceMenuExpanded = false },
+                            modifier = Modifier
+                                .background(JarvisDarkSurface)
+                                .border(1.dp, JarvisCardBorder, RoundedCornerShape(8.dp))
+                                .fillMaxWidth(0.9f)
+                        ) {
+                            availableVoices.forEach { voice ->
+                                val isSelected = voice.id == selectedVoiceId ||
+                                    (selectedVoiceId == "default" && voice.id == "default")
+                                DropdownMenuItem(
+                                    text = {
+                                        Column {
+                                            Text(
+                                                text = voice.displayName,
+                                                color = if (isSelected) JarvisCyanBright else JarvisTextPrimary,
+                                                fontSize = 13.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                            )
+                                            Text(
+                                                text = if (voice.id == "default") "Engine default voice" else voice.id,
+                                                color = if (isSelected) JarvisCyanPrimary else JarvisTextMuted,
+                                                fontSize = 10.sp
+                                            )
+                                        }
+                                    },
+                                    onClick = {
+                                        onVoiceChange(voice.id)
+                                        isVoiceMenuExpanded = false
+                                    },
+                                    leadingIcon = {
+                                        if (isSelected) {
+                                            Icon(Icons.Default.Check, contentDescription = "Selected", tint = JarvisCyanBright)
+                                        } else {
+                                            Icon(Icons.Default.RecordVoiceOver, contentDescription = null, tint = JarvisTextMuted)
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // 3. Speech Speed Slider
                 Column {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -318,7 +546,7 @@ fun SettingsScreen(
                     )
                 }
 
-                // Pitch Slider
+                // 4. Pitch Slider
                 Column {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -339,6 +567,65 @@ fun SettingsScreen(
                         ),
                         modifier = Modifier.testTag("pitch_slider")
                     )
+                }
+
+                // 5. Test Voice Button
+                OutlinedButton(
+                    onClick = onTestVoice,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("test_voice_button"),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = JarvisCyanBright
+                    ),
+                    border = BorderStroke(1.dp, JarvisCyanPrimary.copy(alpha = 0.7f)),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.VolumeUp,
+                        contentDescription = "Test Voice",
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Test Voice (Speak Sample)",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
+                }
+
+                // 6. Live Diagnostic Info Card
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    color = JarvisCardSurface.copy(alpha = 0.6f),
+                    border = BorderStroke(1.dp, JarvisCardBorder)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Mic,
+                            contentDescription = "Microphone Status",
+                            tint = JarvisCyanBright,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "Microphone Ready • Recognition Locale: ${currentLang.sttLanguageTag}",
+                                color = JarvisTextPrimary,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Text(
+                                text = "AI will respond dynamically in ${currentLang.displayName}",
+                                color = JarvisTextMuted,
+                                fontSize = 10.sp
+                            )
+                        }
+                    }
                 }
             }
         }

@@ -17,7 +17,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.ui.automation.AutomationScreen
 import com.example.ui.components.ConfirmationDialog
+import com.example.ui.devices.DevicesScreen
 import com.example.ui.history.HistoryScreen
 import com.example.ui.home.HomeScreen
 import com.example.ui.memory.MemoryScreen
@@ -25,9 +27,11 @@ import com.example.ui.settings.SettingsScreen
 import com.example.ui.theme.*
 
 enum class AppNavDestination(val label: String, val icon: ImageVector) {
-    HOME("Assistant", Icons.Default.SmartToy),
-    HISTORY("Logs", Icons.Default.History),
-    MEMORY("Memory", Icons.Default.Memory),
+    HOME("Home", Icons.Default.SmartToy),
+    DEVICES("Devices", Icons.Default.Devices),
+    HISTORY("History", Icons.Default.History),
+    MEMORY("Memory", Icons.Default.Psychology),
+    AUTOMATION("Automation", Icons.Default.AutoMode),
     SETTINGS("Settings", Icons.Default.Settings)
 }
 
@@ -42,11 +46,10 @@ fun MainAppScreen(
     val aiSettings by viewModel.aiSettings.collectAsStateWithLifecycle()
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
     val confirmationSettings by viewModel.confirmationSettings.collectAsStateWithLifecycle()
+    val voiceSettings by viewModel.voiceSettings.collectAsStateWithLifecycle()
+    val availableVoices by viewModel.availableVoices.collectAsStateWithLifecycle()
 
     var currentDestination by remember { mutableStateOf(AppNavDestination.HOME) }
-    var speechRate by remember { mutableStateOf(1.0f) }
-    var pitch by remember { mutableStateOf(1.0f) }
-    var language by remember { mutableStateOf("en") }
 
     // Confirmation dialog for consequential actions
     uiState.pendingConfirmation?.let { request ->
@@ -138,8 +141,12 @@ fun MainAppScreen(
                         onStopListening = { viewModel.stopListening() },
                         onSubmitCommand = { cmd -> viewModel.processCommand(cmd) },
                         onSpeakResponse = { viewModel.speakCurrentResponse() },
-                        onToggleMute = { viewModel.toggleVoiceMute() }
+                        onToggleMute = { viewModel.toggleVoiceMute() },
+                        sttLanguageTag = voiceSettings.language.sttLanguageTag
                     )
+                }
+                AppNavDestination.DEVICES -> {
+                    DevicesScreen(viewModel = viewModel)
                 }
                 AppNavDestination.HISTORY -> {
                     HistoryScreen(
@@ -156,26 +163,24 @@ fun MainAppScreen(
                         onClearAllMemories = { viewModel.clearAllMemories() }
                     )
                 }
+                AppNavDestination.AUTOMATION -> {
+                    AutomationScreen(viewModel = viewModel)
+                }
                 AppNavDestination.SETTINGS -> {
                     SettingsScreen(
-                        speechRate = speechRate,
-                        pitch = pitch,
-                        preferredLanguage = language,
+                        speechRate = voiceSettings.speechRate,
+                        pitch = voiceSettings.pitch,
+                        preferredLanguage = voiceSettings.languageCode,
+                        selectedVoiceId = voiceSettings.voiceId,
+                        availableVoices = availableVoices,
                         aiSettings = aiSettings,
                         themeMode = themeMode,
                         onThemeModeChange = { viewModel.setThemeMode(it) },
-                        onSpeechRateChange = {
-                            speechRate = it
-                            viewModel.setSpeechRate(it)
-                        },
-                        onPitchChange = {
-                            pitch = it
-                            viewModel.setPitch(it)
-                        },
-                        onLanguageChange = {
-                            language = it
-                            viewModel.setPreferredLanguage(it)
-                        },
+                        onSpeechRateChange = { viewModel.setSpeechRate(it) },
+                        onPitchChange = { viewModel.setPitch(it) },
+                        onLanguageChange = { viewModel.setVoiceLanguage(it) },
+                        onVoiceChange = { viewModel.setVoice(it) },
+                        onTestVoice = { viewModel.testVoice() },
                         onSelectProvider = { providerType -> viewModel.selectAIProvider(providerType) },
                         onUpdateApiKey = { key -> viewModel.updateCustomApiKey(key) },
                         onUpdateOpenRouterConfig = { key, model -> viewModel.updateOpenRouterConfig(key, model) },

@@ -127,10 +127,19 @@ class FirebaseAIProvider(
                 cachedGenerativeModel = it
             }
 
-            val promptWithContext = if (request.conversationContext.isNotEmpty()) {
-                "Recent context:\n${request.conversationContext.takeLast(3).joinToString("\n")}\n\nUser request: ${request.prompt}"
-            } else {
-                request.prompt
+            val promptWithContext = buildString {
+                if (!request.languageInstruction.isNullOrBlank()) {
+                    append("LANGUAGE INSTRUCTION:\n")
+                    append(request.languageInstruction)
+                    append("\n\n")
+                }
+                if (request.conversationContext.isNotEmpty()) {
+                    append("Recent context:\n")
+                    append(request.conversationContext.takeLast(3).joinToString("\n"))
+                    append("\n\n")
+                }
+                append("User request: ")
+                append(request.prompt)
             }
 
             val response = model.generateContent(promptWithContext)
@@ -162,11 +171,15 @@ class FirebaseAIProvider(
         localFallback.processCommand(request)
     }
 
-    private fun buildSystemPrompt(tools: List<ToolInfo>): String {
+    private fun buildSystemPrompt(tools: List<ToolInfo>, languageInstruction: String? = null): String {
+        val langBlock = if (!languageInstruction.isNullOrBlank()) {
+            "\nCRITICAL RESPONSE LANGUAGE REQUIREMENT:\n$languageInstruction\nYou MUST formulate all spoken conversational replies, explanations, and 'response' text strictly following this language requirement.\n"
+        } else ""
+
         return """
         You are JARVIS, a highly intelligent, polite personal Android assistant.
         You listen to recognized speech text from the user and generate helpful, accurate responses or execute device actions.
-        
+        $langBlock
         Rules:
         1. Understand natural speech commands in English, Hindi, and Hinglish.
         2. If the user's intent matches one of the registered tools below, invoke that tool via Format A or include intent keywords (e.g. [INTENT: TOGGLE_WIFI] or [INTENT: OPEN_APP app="..."]) in Format B.
@@ -188,7 +201,7 @@ class FirebaseAIProvider(
     }
 
     private suspend fun callGeminiRestApi(request: AIRequest, apiKey: String): AIResponse? {
-        val systemPrompt = buildSystemPrompt(request.tools)
+        val systemPrompt = buildSystemPrompt(request.tools, request.languageInstruction)
 
         val jsonPayload = JSONObject().apply {
             val contents = JSONArray().apply {

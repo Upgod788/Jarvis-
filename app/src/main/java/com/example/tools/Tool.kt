@@ -11,6 +11,7 @@ interface Tool {
     val requiresConfirmation: Boolean
 
     suspend fun execute(context: Context, params: Map<String, Any?>): ToolResult
+    suspend fun verify(context: Context, params: Map<String, Any?>): Boolean = true
 }
 
 data class ToolParameter(
