@@ -18,10 +18,11 @@ class MainActivity : ComponentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
     enableEdgeToEdge()
+    val targetScreen = intent?.getStringExtra("navigate_to")
     setContent {
       val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
       MyApplicationTheme(themeMode = themeMode) {
-        MainAppScreen(viewModel = viewModel)
+        MainAppScreen(viewModel = viewModel, initialSubScreen = targetScreen)
       }
     }
   }

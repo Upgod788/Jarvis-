@@ -25,6 +25,9 @@ import com.example.ui.home.HomeScreen
 import com.example.ui.memory.MemoryScreen
 import com.example.ui.settings.SettingsScreen
 import com.example.ui.theme.*
+import com.example.ui.updates.AppUpdatesScreen
+import com.example.ui.updates.UpdatePromptDialog
+import com.example.update.UpdateStatus
 
 enum class AppNavDestination(val label: String, val icon: ImageVector) {
     HOME("Home", Icons.Default.SmartToy),
@@ -38,6 +41,7 @@ enum class AppNavDestination(val label: String, val icon: ImageVector) {
 @Composable
 fun MainAppScreen(
     viewModel: JarvisViewModel,
+    initialSubScreen: String? = null,
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -48,8 +52,31 @@ fun MainAppScreen(
     val confirmationSettings by viewModel.confirmationSettings.collectAsStateWithLifecycle()
     val voiceSettings by viewModel.voiceSettings.collectAsStateWithLifecycle()
     val availableVoices by viewModel.availableVoices.collectAsStateWithLifecycle()
+    val updateStatus by viewModel.updateStatus.collectAsStateWithLifecycle()
 
     var currentDestination by remember { mutableStateOf(AppNavDestination.HOME) }
+    var activeSubScreen by remember(initialSubScreen) { mutableStateOf(initialSubScreen) }
+    var dismissedDialogVersion by remember { mutableStateOf<Int?>(null) }
+
+    // In-App Update Alert Dialog
+    if (activeSubScreen != "updates") {
+        (updateStatus as? UpdateStatus.Available)?.let { avail ->
+            if (avail.isCritical || dismissedDialogVersion != avail.manifest.latestVersionCode) {
+                UpdatePromptDialog(
+                    manifest = avail.manifest,
+                    isCritical = avail.isCritical,
+                    onConfirmUpdate = {
+                        activeSubScreen = "updates"
+                        viewModel.startDownloadUpdate(avail.manifest)
+                    },
+                    onDismiss = {
+                        dismissedDialogVersion = avail.manifest.latestVersionCode
+                        viewModel.dismissUpdate(avail.manifest.latestVersionCode)
+                    }
+                )
+            }
+        }
+    }
 
     // Confirmation dialog for consequential actions
     uiState.pendingConfirmation?.let { request ->
@@ -95,105 +122,116 @@ fun MainAppScreen(
         modifier = modifier.fillMaxSize(),
         containerColor = JarvisDarkBackground,
         bottomBar = {
-            NavigationBar(
-                containerColor = JarvisDarkSurface,
-                tonalElevation = 6.dp,
-                modifier = Modifier.border(0.5.dp, JarvisCardBorder, androidx.compose.ui.graphics.RectangleShape)
-            ) {
-                AppNavDestination.values().forEach { destination ->
-                    val selected = currentDestination == destination
-                    NavigationBarItem(
-                        selected = selected,
-                        onClick = { currentDestination = destination },
-                        icon = {
-                            Icon(
-                                imageVector = destination.icon,
-                                contentDescription = destination.label,
-                                tint = if (selected) JarvisCyanBright else JarvisTextMuted
-                            )
-                        },
-                        label = {
-                            Text(
-                                text = destination.label,
-                                color = if (selected) JarvisCyanBright else JarvisTextMuted
-                            )
-                        },
-                        colors = NavigationBarItemDefaults.colors(
-                            indicatorColor = JarvisCyanPrimary.copy(alpha = 0.2f)
-                        ),
-                        modifier = Modifier.testTag("nav_tab_${destination.name.lowercase()}")
-                    )
+            if (activeSubScreen == null) {
+                NavigationBar(
+                    containerColor = JarvisDarkSurface,
+                    tonalElevation = 6.dp,
+                    modifier = Modifier.border(0.5.dp, JarvisCardBorder, androidx.compose.ui.graphics.RectangleShape)
+                ) {
+                    AppNavDestination.values().forEach { destination ->
+                        val selected = currentDestination == destination
+                        NavigationBarItem(
+                            selected = selected,
+                            onClick = { currentDestination = destination },
+                            icon = {
+                                Icon(
+                                    imageVector = destination.icon,
+                                    contentDescription = destination.label,
+                                    tint = if (selected) JarvisCyanBright else JarvisTextMuted
+                                )
+                            },
+                            label = {
+                                Text(
+                                    text = destination.label,
+                                    color = if (selected) JarvisCyanBright else JarvisTextMuted
+                                )
+                            },
+                            colors = NavigationBarItemDefaults.colors(
+                                indicatorColor = JarvisCyanPrimary.copy(alpha = 0.2f)
+                            ),
+                            modifier = Modifier.testTag("nav_tab_${destination.name.lowercase()}")
+                        )
+                    }
                 }
             }
         }
     ) { innerPadding ->
-        AnimatedContent(
-            targetState = currentDestination,
-            transitionSpec = { fadeIn() togetherWith fadeOut() },
-            label = "screen_transition",
-            modifier = Modifier.padding(innerPadding)
-        ) { destination ->
-            when (destination) {
-                AppNavDestination.HOME -> {
-                    HomeScreen(
-                        uiState = uiState,
-                        onStartListening = { viewModel.startListening() },
-                        onStopListening = { viewModel.stopListening() },
-                        onSubmitCommand = { cmd -> viewModel.processCommand(cmd) },
-                        onSpeakResponse = { viewModel.speakCurrentResponse() },
-                        onToggleMute = { viewModel.toggleVoiceMute() },
-                        sttLanguageTag = voiceSettings.language.sttLanguageTag
-                    )
-                }
-                AppNavDestination.DEVICES -> {
-                    DevicesScreen(viewModel = viewModel)
-                }
-                AppNavDestination.HISTORY -> {
-                    HistoryScreen(
-                        conversations = conversations,
-                        onDeleteConversation = { id -> viewModel.deleteHistoryItem(id) },
-                        onClearAllHistory = { viewModel.clearHistory() }
-                    )
-                }
-                AppNavDestination.MEMORY -> {
-                    MemoryScreen(
-                        memories = memories,
-                        onSaveMemory = { k, v -> viewModel.saveMemory(k, v) },
-                        onDeleteMemory = { m -> viewModel.deleteMemory(m) },
-                        onClearAllMemories = { viewModel.clearAllMemories() }
-                    )
-                }
-                AppNavDestination.AUTOMATION -> {
-                    AutomationScreen(viewModel = viewModel)
-                }
-                AppNavDestination.SETTINGS -> {
-                    SettingsScreen(
-                        speechRate = voiceSettings.speechRate,
-                        pitch = voiceSettings.pitch,
-                        preferredLanguage = voiceSettings.languageCode,
-                        selectedVoiceId = voiceSettings.voiceId,
-                        availableVoices = availableVoices,
-                        aiSettings = aiSettings,
-                        themeMode = themeMode,
-                        onThemeModeChange = { viewModel.setThemeMode(it) },
-                        onSpeechRateChange = { viewModel.setSpeechRate(it) },
-                        onPitchChange = { viewModel.setPitch(it) },
-                        onLanguageChange = { viewModel.setVoiceLanguage(it) },
-                        onVoiceChange = { viewModel.setVoice(it) },
-                        onTestVoice = { viewModel.testVoice() },
-                        onSelectProvider = { providerType -> viewModel.selectAIProvider(providerType) },
-                        onUpdateApiKey = { key -> viewModel.updateCustomApiKey(key) },
-                        onUpdateOpenRouterConfig = { key, model -> viewModel.updateOpenRouterConfig(key, model) },
-                        onTestOpenRouterConnection = { key, model -> viewModel.testOpenRouterConnection(key, model) },
-                        onClearHistory = { viewModel.clearHistory() },
-                        onClearMemories = { viewModel.clearAllMemories() },
-                        confirmCalls = confirmationSettings.requireCallConfirmation,
-                        confirmSms = confirmationSettings.requireSmsConfirmation,
-                        confirmWhatsApp = confirmationSettings.confirmWhatsAppMessages,
-                        onConfirmCallsChange = { viewModel.setConfirmCalls(it) },
-                        onConfirmSmsChange = { viewModel.setConfirmSms(it) },
-                        onConfirmWhatsAppChange = { viewModel.setConfirmWhatsApp(it) }
-                    )
+        if (activeSubScreen == "updates") {
+            AppUpdatesScreen(
+                viewModel = viewModel,
+                onBack = { activeSubScreen = null },
+                modifier = Modifier.padding(innerPadding)
+            )
+        } else {
+            AnimatedContent(
+                targetState = currentDestination,
+                transitionSpec = { fadeIn() togetherWith fadeOut() },
+                label = "screen_transition",
+                modifier = Modifier.padding(innerPadding)
+            ) { destination ->
+                when (destination) {
+                    AppNavDestination.HOME -> {
+                        HomeScreen(
+                            uiState = uiState,
+                            onStartListening = { viewModel.startListening() },
+                            onStopListening = { viewModel.stopListening() },
+                            onSubmitCommand = { cmd -> viewModel.processCommand(cmd) },
+                            onSpeakResponse = { viewModel.speakCurrentResponse() },
+                            onToggleMute = { viewModel.toggleVoiceMute() },
+                            sttLanguageTag = voiceSettings.language.sttLanguageTag
+                        )
+                    }
+                    AppNavDestination.DEVICES -> {
+                        DevicesScreen(viewModel = viewModel)
+                    }
+                    AppNavDestination.HISTORY -> {
+                        HistoryScreen(
+                            conversations = conversations,
+                            onDeleteConversation = { id -> viewModel.deleteHistoryItem(id) },
+                            onClearAllHistory = { viewModel.clearHistory() }
+                        )
+                    }
+                    AppNavDestination.MEMORY -> {
+                        MemoryScreen(
+                            memories = memories,
+                            onSaveMemory = { k, v -> viewModel.saveMemory(k, v) },
+                            onDeleteMemory = { m -> viewModel.deleteMemory(m) },
+                            onClearAllMemories = { viewModel.clearAllMemories() }
+                        )
+                    }
+                    AppNavDestination.AUTOMATION -> {
+                        AutomationScreen(viewModel = viewModel)
+                    }
+                    AppNavDestination.SETTINGS -> {
+                        SettingsScreen(
+                            speechRate = voiceSettings.speechRate,
+                            pitch = voiceSettings.pitch,
+                            preferredLanguage = voiceSettings.languageCode,
+                            selectedVoiceId = voiceSettings.voiceId,
+                            availableVoices = availableVoices,
+                            aiSettings = aiSettings,
+                            themeMode = themeMode,
+                            onThemeModeChange = { viewModel.setThemeMode(it) },
+                            onSpeechRateChange = { viewModel.setSpeechRate(it) },
+                            onPitchChange = { viewModel.setPitch(it) },
+                            onLanguageChange = { viewModel.setVoiceLanguage(it) },
+                            onVoiceChange = { viewModel.setVoice(it) },
+                            onTestVoice = { viewModel.testVoice() },
+                            onSelectProvider = { providerType -> viewModel.selectAIProvider(providerType) },
+                            onUpdateApiKey = { key -> viewModel.updateCustomApiKey(key) },
+                            onUpdateOpenRouterConfig = { key, model -> viewModel.updateOpenRouterConfig(key, model) },
+                            onTestOpenRouterConnection = { key, model -> viewModel.testOpenRouterConnection(key, model) },
+                            onClearHistory = { viewModel.clearHistory() },
+                            onClearMemories = { viewModel.clearAllMemories() },
+                            confirmCalls = confirmationSettings.requireCallConfirmation,
+                            confirmSms = confirmationSettings.requireSmsConfirmation,
+                            confirmWhatsApp = confirmationSettings.confirmWhatsAppMessages,
+                            onConfirmCallsChange = { viewModel.setConfirmCalls(it) },
+                            onConfirmSmsChange = { viewModel.setConfirmSms(it) },
+                            onConfirmWhatsAppChange = { viewModel.setConfirmWhatsApp(it) },
+                            onOpenAppUpdates = { activeSubScreen = "updates" }
+                        )
+                    }
                 }
             }
         }

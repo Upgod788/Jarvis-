@@ -1,6 +1,7 @@
 package com.example
 
 import android.app.Application
+import androidx.work.Configuration
 import com.example.agent.ConfirmationManager
 import com.example.agent.JarvisAgent
 import com.example.agent.ToolRegistry
@@ -12,7 +13,11 @@ import com.example.voice.SpeechRecognizerManager
 import com.example.voice.TextToSpeechManager
 import com.example.voice.WakeWordManager
 
-class JarvisApplication : Application() {
+class JarvisApplication : Application(), Configuration.Provider {
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder()
+            .setMinimumLoggingLevel(android.util.Log.INFO)
+            .build()
 
     lateinit var database: JarvisDatabase
         private set
@@ -56,14 +61,18 @@ class JarvisApplication : Application() {
     lateinit var agent: JarvisAgent
         private set
 
+    lateinit var updateManager: com.example.update.UpdateManager
+        private set
+
     override fun onCreate() {
         super.onCreate()
         database = JarvisDatabase.getInstance(this)
         memoryRepository = MemoryRepository(database.memoryDao())
         conversationRepository = ConversationRepository(database.conversationDao())
         deviceManager = com.example.devices.DeviceManager(this)
+        updateManager = com.example.update.UpdateManager(this)
         routineManager = com.example.routines.RoutineManager(this) { toolRegistry }
-        toolRegistry = ToolRegistry(memoryRepository, deviceManager, routineManager)
+        toolRegistry = ToolRegistry(memoryRepository, deviceManager, routineManager, updateManagerProvider = { updateManager })
         confirmationManager = ConfirmationManager(this)
         themeManager = com.example.ui.theme.ThemeManager(this)
         voiceSettingsManager = com.example.voice.VoiceSettingsManager(this)

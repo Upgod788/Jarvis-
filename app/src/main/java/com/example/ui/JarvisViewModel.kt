@@ -51,6 +51,98 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
     val routineManager = app.routineManager
     val routines: StateFlow<List<com.example.routines.Routine>> = routineManager.routines
 
+    val updateManager = app.updateManager
+    val updateStatus: StateFlow<com.example.update.UpdateStatus> = updateManager.status
+    val updateSettings: StateFlow<com.example.update.UpdateSettings> = updateManager.preferences.settings
+    val remoteConfig: StateFlow<com.example.update.RemoteConfig> = updateManager.remoteConfigManager.config
+    val updateHistory: StateFlow<List<com.example.database.UpdateHistoryEntity>> = app.database.updateHistoryDao().getAll()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun checkForUpdates(isUserInitiated: Boolean = true) {
+        updateManager.checkForUpdates(isUserInitiated = isUserInitiated)
+    }
+
+    fun startDownloadUpdate(manifest: com.example.update.UpdateManifest? = null) {
+        updateManager.startDownload(manifest)
+    }
+
+    fun cancelUpdateDownload() {
+        updateManager.cancelDownload()
+    }
+
+    fun installUpdate(onResult: (com.example.update.InstallResult) -> Unit = {}) {
+        viewModelScope.launch {
+            val result = updateManager.installDownloadedApk()
+            onResult(result)
+        }
+    }
+
+    fun dismissUpdate(versionCode: Int) {
+        updateManager.dismissUpdate(versionCode)
+    }
+
+    fun setAutoUpdate(enabled: Boolean) {
+        updateManager.preferences.setAutoUpdate(enabled)
+        if (enabled) {
+            com.example.update.BackgroundUpdateWorker.schedulePeriodicCheck(app, updateManager.preferences.settings.value.wifiOnly)
+        } else {
+            com.example.update.BackgroundUpdateWorker.cancelPeriodicCheck(app)
+        }
+    }
+
+    fun setWifiOnly(enabled: Boolean) {
+        updateManager.preferences.setWifiOnly(enabled)
+        if (updateManager.preferences.settings.value.autoUpdateEnabled) {
+            com.example.update.BackgroundUpdateWorker.schedulePeriodicCheck(app, enabled)
+        }
+    }
+
+    fun setAutoDownload(enabled: Boolean) {
+        updateManager.preferences.setAutoDownload(enabled)
+    }
+
+    fun setUpdateOverMobileData(enabled: Boolean) {
+        updateManager.preferences.setUpdateOverMobileData(enabled)
+    }
+
+    fun setIncludeBetaUpdates(enabled: Boolean) {
+        updateManager.preferences.setIncludeBetaUpdates(enabled)
+    }
+
+    fun setUpdateChannel(channel: String) {
+        updateManager.preferences.setUpdateChannel(channel)
+    }
+
+    fun setCustomServerUrl(url: String) {
+        updateManager.preferences.setCustomServerUrl(url)
+    }
+
+    fun setSimulationMode(enabled: Boolean) {
+        updateManager.preferences.setSimulationMode(enabled)
+    }
+
+    fun setSimulatedTargetVersion(version: String) {
+        updateManager.preferences.setSimulatedTargetVersion(version)
+    }
+
+    fun setSimulatedMandatory(mandatory: Boolean) {
+        updateManager.preferences.setSimulatedIsMandatory(mandatory)
+    }
+
+    fun setSimulatedMaintenance(enabled: Boolean) {
+        updateManager.remoteConfigManager.setSimulatedMaintenance(enabled)
+    }
+
+    fun clearUpdateCache() {
+        updateManager.clearCache()
+    }
+
+    fun clearUpdateHistory() {
+        viewModelScope.launch {
+            app.database.updateHistoryDao().clearAll()
+        }
+    }
+
     fun setThemeMode(mode: com.example.ui.theme.ThemeMode) {
         app.themeManager.setThemeMode(mode)
     }
@@ -93,6 +185,13 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
         viewModelScope.launch {
             conversationRepo.getRecent(3).collect { recents ->
                 _uiState.value = _uiState.value.copy(recentConversations = recents)
+            }
+        }
+
+        // Automatic update check on app launch
+        viewModelScope.launch {
+            if (updateManager.preferences.settings.value.autoUpdateEnabled) {
+                updateManager.checkForUpdates(isUserInitiated = false)
             }
         }
     }

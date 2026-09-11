@@ -71,6 +71,7 @@ fun SettingsScreen(
     onConfirmCallsChange: (Boolean) -> Unit = {},
     onConfirmSmsChange: (Boolean) -> Unit = {},
     onConfirmWhatsAppChange: (Boolean) -> Unit = {},
+    onOpenAppUpdates: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -1151,6 +1152,35 @@ fun SettingsScreen(
                     ) {
                         Text("Clear Memory", fontSize = 12.sp)
                     }
+                }
+            }
+        }
+
+        // 5.5 APP UPDATES
+        SettingsSectionCard(title = "App Updates & Releases", icon = Icons.Default.SystemUpdate) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "Autonomous update manager with remote manifest checks, SHA-256 integrity verification, and official Android package installer workflow.",
+                    color = JarvisTextMuted,
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp
+                )
+
+                Button(
+                    onClick = onOpenAppUpdates,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("settings_open_app_updates_button"),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = JarvisCyanPrimary.copy(alpha = 0.2f),
+                        contentColor = JarvisCyanBright
+                    ),
+                    shape = RoundedCornerShape(10.dp),
+                    border = BorderStroke(1.dp, JarvisCyanPrimary.copy(alpha = 0.5f))
+                ) {
+                    Icon(Icons.Default.CloudSync, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("CONFIGURE APP UPDATES", fontSize = 12.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }

@@ -49,6 +49,10 @@ enum class IntentActionType {
     YOUTUBE,
     BROWSER,
     NOTIFICATIONS,
+    CHECK_UPDATE,
+    DOWNLOAD_UPDATE,
+    INSTALL_UPDATE,
+    SHOW_WHATS_NEW,
     NONE
 }
 
@@ -187,6 +191,60 @@ class CommandHandlerService : Service() {
             }
 
             // Tier 3: Natural language intent-based keywords in Gemini's response
+
+            // 0. Update Assistant Keywords
+            val isUpdateCheck = lowerCombined.contains("check for update") ||
+                    lowerCombined.contains("check for updates") ||
+                    lowerCombined.contains("check update") ||
+                    lowerCombined.contains("check updates") ||
+                    lowerCombined.contains("is there a new version") ||
+                    lowerCombined.contains("any update") ||
+                    lowerCombined.contains("update status") ||
+                    lowerCombined.contains("koi update") ||
+                    lowerCombined.contains("update check karo")
+            val isDownloadUpdate = lowerCombined.contains("download the latest update") ||
+                    lowerCombined.contains("download update") ||
+                    lowerCombined.contains("download new version") ||
+                    lowerCombined.contains("update download karo")
+            val isInstallUpdate = lowerCombined.contains("update yourself") ||
+                    lowerCombined.contains("install update") ||
+                    lowerCombined.contains("install the update") ||
+                    lowerCombined.contains("update install karo")
+            val isWhatsNew = lowerCombined.contains("what's new") ||
+                    lowerCombined.contains("whats new") ||
+                    lowerCombined.contains("show me what's new") ||
+                    lowerCombined.contains("changelog") ||
+                    lowerCombined.contains("release notes")
+
+            if (isInstallUpdate) {
+                return DetectedIntentAction(
+                    actionType = IntentActionType.INSTALL_UPDATE,
+                    parameters = mapOf("action" to "install"),
+                    rawKeyword = "update",
+                    spokenFeedback = "Opening Android Package Installer to approve update."
+                )
+            } else if (isDownloadUpdate) {
+                return DetectedIntentAction(
+                    actionType = IntentActionType.DOWNLOAD_UPDATE,
+                    parameters = mapOf("action" to "download"),
+                    rawKeyword = "update",
+                    spokenFeedback = "Starting download of JARVIS update."
+                )
+            } else if (isWhatsNew) {
+                return DetectedIntentAction(
+                    actionType = IntentActionType.SHOW_WHATS_NEW,
+                    parameters = mapOf("action" to "whats_new"),
+                    rawKeyword = "update",
+                    spokenFeedback = "Checking release notes."
+                )
+            } else if (isUpdateCheck) {
+                return DetectedIntentAction(
+                    actionType = IntentActionType.CHECK_UPDATE,
+                    parameters = mapOf("action" to "check"),
+                    rawKeyword = "update",
+                    spokenFeedback = "Checking for JARVIS updates."
+                )
+            }
 
             // 1. Wi-Fi Keywords
             if (matchesWifiIntent(lowerResponse, lowerCombined)) {
@@ -828,6 +886,29 @@ class CommandHandlerService : Service() {
                         data = result.data,
                         toolResult = result
                     )
+                }
+
+                IntentActionType.CHECK_UPDATE,
+                IntentActionType.DOWNLOAD_UPDATE,
+                IntentActionType.INSTALL_UPDATE,
+                IntentActionType.SHOW_WHATS_NEW -> {
+                    val updateTool = toolRegistry?.getTool("app_update")
+                    if (updateTool != null) {
+                        val result = updateTool.execute(appContext, detectedAction.parameters)
+                        CommandExecutionResult(
+                            success = result.success,
+                            action = detectedAction,
+                            message = result.message,
+                            data = result.data,
+                            toolResult = result
+                        )
+                    } else {
+                        CommandExecutionResult(
+                            success = false,
+                            action = detectedAction,
+                            message = "Update system is initializing. Please try again shortly."
+                        )
+                    }
                 }
 
                 IntentActionType.NONE -> {

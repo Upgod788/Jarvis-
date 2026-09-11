@@ -8,7 +8,8 @@ import com.example.tools.*
 class ToolRegistry(
     memoryRepository: MemoryRepository,
     deviceManager: DeviceManager? = null,
-    routineManager: RoutineManager? = null
+    routineManager: RoutineManager? = null,
+    updateManagerProvider: (() -> com.example.update.UpdateManager)? = null
 ) {
 
     private val tools = mutableMapOf<String, Tool>()
@@ -41,6 +42,10 @@ class ToolRegistry(
         register(NavigationTool())
         register(CalendarTool())
         register(FileTool())
+
+        if (updateManagerProvider != null) {
+            register(AppUpdateTool(updateManagerProvider))
+        }
 
         if (deviceManager != null) {
             register(SmartDeviceTool(deviceManager))
