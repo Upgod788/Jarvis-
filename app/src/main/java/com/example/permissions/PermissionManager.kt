@@ -1,14 +1,11 @@
 package com.example.permissions
 
-import android.Manifest
 import android.content.Context
-import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
 
 object PermissionManager {
-
     fun hasPermission(context: Context, permission: String): Boolean {
-        return ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+        return ContextCompat.checkSelfPermission(context, permission) == android.content.pm.PackageManager.PERMISSION_GRANTED
     }
 
     fun hasAllPermissions(context: Context, permissions: List<String>): Boolean {
@@ -21,11 +18,11 @@ object PermissionManager {
 
     fun getPermissionLabel(permission: String): String {
         return when (permission) {
-            Manifest.permission.RECORD_AUDIO -> "Microphone"
-            Manifest.permission.CAMERA -> "Camera"
-            Manifest.permission.READ_CONTACTS -> "Contacts"
-            Manifest.permission.CALL_PHONE -> "Phone Calls"
-            Manifest.permission.SEND_SMS -> "Send SMS"
+            android.Manifest.permission.RECORD_AUDIO -> "Microphone"
+            android.Manifest.permission.CALL_PHONE -> "Phone Calls"
+            android.Manifest.permission.SEND_SMS -> "Send SMS"
+            android.Manifest.permission.READ_CONTACTS -> "Contacts"
+            android.Manifest.permission.CAMERA -> "Camera"
             else -> permission.substringAfterLast(".")
         }
     }

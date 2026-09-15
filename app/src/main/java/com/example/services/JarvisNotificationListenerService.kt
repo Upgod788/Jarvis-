@@ -1,8 +1,8 @@
 package com.example.services
 
-import android.app.Notification
 import android.content.ComponentName
 import android.content.Context
+import android.os.Bundle
 import android.provider.Settings
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
@@ -17,7 +17,6 @@ data class JarvisNotification(
 )
 
 class JarvisNotificationListenerService : NotificationListenerService() {
-
     companion object {
         private val recentNotifications = CopyOnWriteArrayList<JarvisNotification>()
 
@@ -35,30 +34,20 @@ class JarvisNotificationListenerService : NotificationListenerService() {
 
         fun isNotificationAccessGranted(context: Context): Boolean {
             val component = ComponentName(context, JarvisNotificationListenerService::class.java).flattenToString()
-            val enabledListeners = Settings.Secure.getString(
-                context.contentResolver,
-                "enabled_notification_listeners"
-            ) ?: return false
+            val enabledListeners = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners") ?: return false
             return enabledListeners.contains(component)
         }
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         super.onNotificationPosted(sbn)
-        sbn?.let {
-            val extras = it.notification.extras
-            val title = extras.getString(Notification.EXTRA_TITLE) ?: ""
-            val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
+        if (sbn != null) {
+            val bundle = sbn.notification.extras
+            val title = bundle.getString("android.title") ?: ""
+            val text = bundle.getCharSequence("android.text")?.toString() ?: ""
+
             if (title.isNotBlank() || text.isNotBlank()) {
-                val notif = JarvisNotification(
-                    id = it.id,
-                    packageName = it.packageName,
-                    title = title,
-                    text = text,
-                    postTime = it.postTime
-                )
-                // Add to head
-                recentNotifications.add(0, notif)
+                recentNotifications.add(0, JarvisNotification(sbn.id, sbn.packageName, title, text, sbn.postTime))
                 if (recentNotifications.size > 50) {
                     recentNotifications.removeAt(recentNotifications.size - 1)
                 }

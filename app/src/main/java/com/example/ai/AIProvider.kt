@@ -13,9 +13,12 @@ data class ToolInvocation(
 
 data class AIRequest(
     val prompt: String,
-    val tools: List<ToolInfo>,
+    val tools: List<ToolInfo> = emptyList(),
     val conversationContext: List<String> = emptyList(),
-    val languageInstruction: String? = null
+    val languageInstruction: String? = null,
+    val memoryContext: String? = null,
+    val personalityInstruction: String? = null,
+    val emotionalGuideline: String? = null
 )
 
 data class AIResponse(

@@ -1,7 +1,6 @@
 package com.example.services
 
 import android.accessibilityservice.AccessibilityService
-import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.Context
 import android.os.Bundle
 import android.provider.Settings
@@ -10,18 +9,31 @@ import android.view.accessibility.AccessibilityNodeInfo
 
 class JarvisAccessibilityService : AccessibilityService() {
 
+    companion object {
+        var instance: JarvisAccessibilityService? = null
+            private set
+
+        val isRunning: Boolean
+            get() = instance != null
+
+        fun isAccessibilitySettingsEnabled(context: Context): Boolean {
+            return try {
+                val enabled = Settings.Secure.getString(context.contentResolver, "enabled_accessibility_services") ?: ""
+                enabled.contains(context.packageName)
+            } catch (e: Exception) {
+                false
+            }
+        }
+    }
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // Only process events when explicitly requested during an automation step
-    }
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
 
-    override fun onInterrupt() {
-        // Clean up when system interrupts
-    }
+    override fun onInterrupt() {}
 
     override fun onDestroy() {
         super.onDestroy()
@@ -50,28 +62,26 @@ class JarvisAccessibilityService : AccessibilityService() {
 
     fun typeTextIntoFocusedField(text: String): Boolean {
         val root = rootInActiveWindow ?: return false
-        val focusedNode = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
-        if (focusedNode != null && focusedNode.isEditable) {
-            val arguments = Bundle().apply {
-                putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
-            }
-            return focusedNode.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, arguments)
+        val focusedNode = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT) ?: return false
+        if (!focusedNode.isEditable) return false
+        val args = Bundle().apply {
+            putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text)
         }
-        return false
+        return focusedNode.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
     }
 
     fun readVisibleText(): List<String> {
         val root = rootInActiveWindow ?: return emptyList()
-        val textList = mutableListOf<String>()
-        collectText(root, textList)
-        return textList
+        val list = mutableListOf<String>()
+        collectText(root, list)
+        return list
     }
 
     private fun collectText(node: AccessibilityNodeInfo?, list: MutableList<String>) {
         if (node == null) return
-        val text = node.text?.toString()?.trim()
-        if (!text.isNullOrBlank()) {
-            list.add(text)
+        val t = node.text?.toString()?.trim()
+        if (!t.isNullOrBlank()) {
+            list.add(t)
         }
         for (i in 0 until node.childCount) {
             collectText(node.getChild(i), list)
@@ -84,20 +94,22 @@ class JarvisAccessibilityService : AccessibilityService() {
 
     fun scrollForward(): Boolean {
         val root = rootInActiveWindow ?: return false
-        return findScrollableNode(root)?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD) ?: false
+        val scrollable = findScrollableNode(root) ?: return false
+        return scrollable.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD)
     }
 
     fun scrollBackward(): Boolean {
         val root = rootInActiveWindow ?: return false
-        return findScrollableNode(root)?.performAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD) ?: false
+        val scrollable = findScrollableNode(root) ?: return false
+        return scrollable.performAction(AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
     }
 
     private fun findScrollableNode(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
         if (node == null) return null
         if (node.isScrollable) return node
         for (i in 0 until node.childCount) {
-            val found = findScrollableNode(node.getChild(i))
-            if (found != null) return found
+            val f = findScrollableNode(node.getChild(i))
+            if (f != null) return f
         }
         return null
     }
@@ -105,37 +117,16 @@ class JarvisAccessibilityService : AccessibilityService() {
     fun clickFirstEditable(): Boolean {
         val root = rootInActiveWindow ?: return false
         val editable = findFirstEditableNode(root) ?: return false
-        return editable.performAction(AccessibilityNodeInfo.ACTION_CLICK) ||
-               editable.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+        return editable.performAction(AccessibilityNodeInfo.ACTION_CLICK) || editable.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
     }
 
     private fun findFirstEditableNode(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
         if (node == null) return null
         if (node.isEditable) return node
         for (i in 0 until node.childCount) {
-            val found = findFirstEditableNode(node.getChild(i))
-            if (found != null) return found
+            val f = findFirstEditableNode(node.getChild(i))
+            if (f != null) return f
         }
         return null
-    }
-
-    companion object {
-        @Volatile
-        var instance: JarvisAccessibilityService? = null
-            private set
-
-        fun isRunning(): Boolean = instance != null
-
-        fun isAccessibilitySettingsEnabled(context: Context): Boolean {
-            return try {
-                val enabledServices = Settings.Secure.getString(
-                    context.contentResolver,
-                    Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-                ) ?: ""
-                enabledServices.contains(context.packageName)
-            } catch (e: Exception) {
-                false
-            }
-        }
     }
 }

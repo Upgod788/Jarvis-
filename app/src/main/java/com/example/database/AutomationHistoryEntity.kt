@@ -6,7 +6,7 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "automation_history")
 data class AutomationHistoryEntity(
     @PrimaryKey(autoGenerate = true)
-    val id: Long = 0,
+    val id: Long = 0L,
     val command: String,
     val tool: String,
     val status: String,

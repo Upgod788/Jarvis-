@@ -1,6 +1,7 @@
 package com.example.update
 
 import org.json.JSONArray
+import org.json.JSONException
 import org.json.JSONObject
 
 data class UpdateManifest(
@@ -16,6 +17,8 @@ data class UpdateManifest(
     val publishedAt: String = "",
     val releaseId: String = ""
 ) {
+    val changelog: List<String> get() = releaseNotes
+
     fun toJson(): String {
         val json = JSONObject()
         json.put("latestVersionCode", latestVersionCode)
@@ -23,7 +26,9 @@ data class UpdateManifest(
         json.put("minimumSupportedVersionCode", minimumSupportedVersionCode)
         json.put("downloadUrl", downloadUrl)
         val notesArray = JSONArray()
-        releaseNotes.forEach { notesArray.put(it) }
+        for (note in releaseNotes) {
+            notesArray.put(note)
+        }
         json.put("releaseNotes", notesArray)
         json.put("mandatory", mandatory)
         json.put("sha256", sha256)
@@ -35,6 +40,7 @@ data class UpdateManifest(
     }
 
     companion object {
+        @Throws(JSONException::class)
         fun fromJson(jsonStr: String): UpdateManifest {
             val json = JSONObject(jsonStr)
             val notesList = mutableListOf<String>()
@@ -44,7 +50,6 @@ data class UpdateManifest(
                     notesList.add(array.getString(i))
                 }
             }
-
             return UpdateManifest(
                 latestVersionCode = json.optInt("latestVersionCode", 1),
                 latestVersionName = json.optString("latestVersionName", "1.0.0"),

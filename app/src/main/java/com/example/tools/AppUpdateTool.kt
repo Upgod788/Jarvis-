@@ -4,6 +4,7 @@ import android.content.Context
 import com.example.update.CheckResult
 import com.example.update.InstallResult
 import com.example.update.UpdateManager
+import com.example.update.UpdateStatus
 
 class AppUpdateTool(
     private val updateManagerProvider: () -> UpdateManager
@@ -16,100 +17,125 @@ class AppUpdateTool(
         ToolParameter(
             name = "action",
             type = "string",
-            description = "The update action to perform: 'check', 'download', 'install', or 'whats_new'",
+            description = "The update action to perform: 'check', 'download', 'install', 'status', 'version', or 'whats_new'",
             required = true
         )
     )
 
     override val requiredPermissions: List<String> = emptyList()
-
     override val riskLevel: RiskLevel = RiskLevel.MEDIUM
-
     override val requiresConfirmation: Boolean = false
 
     override suspend fun execute(context: Context, params: Map<String, Any?>): ToolResult {
-        val action = (params["action"] as? String)?.lowercase()?.trim() ?: "check"
+        val action = (params["action"] as? String)?.trim()?.lowercase() ?: "check"
         val updateManager = updateManagerProvider()
 
         return when (action) {
-            "check", "status", "version" -> {
-                val result = updateManager.checker.checkForUpdates(forceRemote = true)
-                when (result) {
+            "check", "check_updates" -> {
+                val checkResult = updateManager.checker.checkForUpdates(forceRemote = true)
+                when (checkResult) {
                     is CheckResult.UpdateAvailable -> {
-                        val m = result.manifest
-                        val notes = m.releaseNotes.take(2).joinToString("; ")
+                        val m = checkResult.manifest
                         ToolResult.ok(
-                            message = "A new version of JARVIS is available: version ${m.latestVersionName}. " +
-                                    (if (notes.isNotBlank()) "Highlights: $notes. " else "") +
-                                    "Would you like me to download and install it?",
-                            data = mapOf(
+                            "A new update for JARVIS is available: v${m.latestVersionName} (Build ${m.latestVersionCode}). Release notes: ${m.releaseNotes}. Say 'Update JARVIS' or 'Download update' to proceed.",
+                            mapOf(
                                 "versionName" to m.latestVersionName,
                                 "versionCode" to m.latestVersionCode,
-                                "mandatory" to m.mandatory,
-                                "releaseNotes" to m.releaseNotes
+                                "releaseNotes" to m.releaseNotes,
+                                "apkUrl" to m.downloadUrl,
+                                "isCritical" to checkResult.isCritical
                             )
                         )
                     }
                     is CheckResult.UpToDate -> {
                         ToolResult.ok(
-                            message = "You are already running the latest version of JARVIS (version ${result.currentVersionName}). Everything is up to date.",
-                            data = mapOf("version" to result.currentVersionName)
+                            "JARVIS is currently up to date on v${checkResult.currentVersionName} (Build ${checkResult.currentVersionCode}). No new updates found.",
+                            mapOf(
+                                "versionName" to checkResult.currentVersionName,
+                                "versionCode" to checkResult.currentVersionCode
+                            )
                         )
                     }
                     is CheckResult.Error -> {
-                        ToolResult.ok(
-                            message = "I couldn't reach the update server right now: ${result.reason}. Local device operations are functioning normally.",
-                            data = mapOf("offline" to result.isOffline)
+                        ToolResult.error(
+                            "Failed to check for updates: ${checkResult.reason}",
+                            data = mapOf("reason" to checkResult.reason, "isOffline" to checkResult.isOffline)
                         )
                     }
                 }
             }
-
             "download" -> {
                 val currentStatus = updateManager.status.value
-                val checkResult = updateManager.checker.checkForUpdates()
-                if (checkResult is CheckResult.UpdateAvailable) {
-                    updateManager.startDownload(checkResult.manifest)
-                    ToolResult.ok(
-                        message = "Starting secure download for JARVIS version ${checkResult.manifest.latestVersionName}. You can monitor progress in Settings > App Updates.",
-                        data = mapOf("version" to checkResult.manifest.latestVersionName)
-                    )
+                val manifest = when (currentStatus) {
+                    is UpdateStatus.Available -> currentStatus.manifest
+                    is UpdateStatus.ReadyToInstall -> {
+                        return ToolResult.ok("Update is already downloaded and ready to install. Say 'Install update' to proceed.")
+                    }
+                    is UpdateStatus.Downloading -> {
+                        return ToolResult.ok("Update download is already in progress: ${currentStatus.progress}% complete.")
+                    }
+                    else -> {
+                        // Check first
+                        val res = updateManager.checker.checkForUpdates(forceRemote = false)
+                        if (res is CheckResult.UpdateAvailable) res.manifest else null
+                    }
+                }
+
+                if (manifest != null) {
+                    updateManager.startDownload(manifest)
+                    ToolResult.ok("Started downloading update v${manifest.latestVersionName}. I will notify you when it's ready to install.")
                 } else {
-                    ToolResult.ok("JARVIS is already on the latest version. No update download is needed.")
+                    ToolResult.error("No update is currently pending download. Check for updates first.")
                 }
             }
-
             "install" -> {
                 val installResult = updateManager.installDownloadedApk()
                 when (installResult) {
-                    is InstallResult.SuccessLaunched -> {
-                        ToolResult.ok("Opening the Android Package Installer. Please approve the prompt to complete the update.")
+                    is InstallResult.Success -> {
+                        ToolResult.ok("Launching Android system package installer. Please confirm installation on your screen.")
                     }
                     is InstallResult.PermissionRequired -> {
-                        context.startActivity(installResult.settingsIntent)
-                        ToolResult.ok("Android requires permission to install updates from this app. Please enable 'Allow from this source' on the screen that just opened.")
+                        ToolResult.requiresUserAction(
+                            "Permission needed: Please enable 'Install unknown apps' for JARVIS in system settings to complete the update.",
+                            mapOf("action" to "grant_install_unknown_apps")
+                        )
                     }
                     is InstallResult.Error -> {
-                        ToolResult.error("Unable to start installation: ${installResult.message}")
+                        ToolResult.error("Could not launch package installer: ${installResult.message}")
                     }
                 }
             }
-
-            "whats_new", "changelog", "release_notes" -> {
-                val checkResult = updateManager.checker.checkForUpdates()
-                if (checkResult is CheckResult.UpdateAvailable) {
-                    val notes = checkResult.manifest.releaseNotes.joinToString(". ")
-                    ToolResult.ok("What's new in JARVIS version ${checkResult.manifest.latestVersionName}: $notes")
-                } else {
-                    ToolResult.ok(
-                        "You are on JARVIS version ${updateManager.currentVersionName}. " +
-                        "Current features include full voice device automation, smart routines, dynamic AI engine selection, and secure auto-updates."
-                    )
+            "status" -> {
+                when (val st = updateManager.status.value) {
+                    is UpdateStatus.Idle -> ToolResult.ok("JARVIS update status is idle. Current version is v${updateManager.currentVersionName}.")
+                    is UpdateStatus.Checking -> ToolResult.ok("Checking for new updates...")
+                    is UpdateStatus.Available -> ToolResult.ok("Update v${st.manifest.latestVersionName} is available.")
+                    is UpdateStatus.Downloading -> ToolResult.ok("Downloading update: ${st.progress}% completed.")
+                    is UpdateStatus.ReadyToInstall -> ToolResult.ok("Update v${st.manifest.latestVersionName} is downloaded and ready to install.")
+                    is UpdateStatus.Installing -> ToolResult.ok("Installation in progress...")
+                    is UpdateStatus.UpToDate -> ToolResult.ok("JARVIS is up to date (v${st.versionName}).")
+                    is UpdateStatus.Error -> ToolResult.error("Update system encountered an error: ${st.message}")
                 }
             }
-
+            "version" -> {
+                ToolResult.ok(
+                    "Current JARVIS Version: v${updateManager.currentVersionName} (Build ${updateManager.currentVersionCode})",
+                    mapOf(
+                        "versionName" to updateManager.currentVersionName,
+                        "versionCode" to updateManager.currentVersionCode
+                    )
+                )
+            }
+            "whats_new", "changelog", "release_notes" -> {
+                val res = updateManager.checker.checkForUpdates(forceRemote = false)
+                if (res is CheckResult.UpdateAvailable) {
+                    ToolResult.ok("What's new in v${res.manifest.latestVersionName}:\n${res.manifest.releaseNotes}")
+                } else {
+                    ToolResult.ok("You are running JARVIS v${updateManager.currentVersionName}. Systems operating normally.")
+                }
+            }
             else -> {
-                ToolResult.error("Unknown update command action: $action. Supported actions are: check, download, install, whats_new.")
+                ToolResult.error("Unknown update action '$action'. Available actions: check, download, install, status, version, whats_new.")
             }
         }
     }

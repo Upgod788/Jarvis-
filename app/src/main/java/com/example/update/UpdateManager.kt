@@ -12,34 +12,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.io.File
 
-sealed interface UpdateStatus {
-    data object Idle : UpdateStatus
-    data object Checking : UpdateStatus
-    data class Available(
-        val manifest: UpdateManifest,
-        val isCritical: Boolean
-    ) : UpdateStatus
-    data class Downloading(
-        val progressPercent: Int,
-        val bytesDownloaded: Long,
-        val totalBytes: Long
-    ) : UpdateStatus
-    data class Downloaded(
-        val file: File,
-        val manifest: UpdateManifest,
-        val sha256: String
-    ) : UpdateStatus
-    data object Installing : UpdateStatus
-    data class UpToDate(
-        val versionName: String,
-        val versionCode: Int
-    ) : UpdateStatus
-    data class Error(
-        val message: String,
-        val isOffline: Boolean = false
-    ) : UpdateStatus
-}
-
 class UpdateManager(
     val context: Context,
     val preferences: UpdatePreferences = UpdatePreferences(context),
@@ -59,101 +31,74 @@ class UpdateManager(
     private var downloadedApkFile: File? = null
 
     val currentVersionName: String
-        get() = checker.getInstalledVersionName()
+        get() = checker.installedVersionName
 
     val currentVersionCode: Int
-        get() = checker.getInstalledVersionCode()
+        get() = checker.installedVersionCode
 
     init {
         // Collect downloader state
         scope.launch {
-            downloader.downloadState.collect { dlState ->
-                when (dlState) {
+            downloader.downloadState.collect { dState ->
+                when (dState) {
+                    is DownloadState.Idle -> {
+                        // Keep current status if idle
+                    }
                     is DownloadState.Progress -> {
                         _status.value = UpdateStatus.Downloading(
-                            progressPercent = dlState.percentage,
-                            bytesDownloaded = dlState.bytesDownloaded,
-                            totalBytes = dlState.totalBytes
+                            progress = dState.percent,
+                            bytesDownloaded = dState.bytesDownloaded,
+                            totalBytes = dState.totalBytes,
+                            speedBytesPerSec = dState.speedBytesPerSec,
+                            etaSeconds = dState.etaSeconds
                         )
                     }
                     is DownloadState.Completed -> {
-                        downloadedApkFile = dlState.file
-                        activeManifest = dlState.manifest
-                        _status.value = UpdateStatus.Downloaded(
-                            file = dlState.file,
-                            manifest = dlState.manifest,
-                            sha256 = dlState.sha256
-                        )
+                        downloadedApkFile = dState.file
+                        activeManifest = dState.manifest
+                        _status.value = UpdateStatus.ReadyToInstall(dState.file, dState.manifest)
                     }
                     is DownloadState.Failed -> {
-                        _status.value = UpdateStatus.Error(dlState.error)
+                        _status.value = UpdateStatus.Error(dState.error)
                     }
                     is DownloadState.Cancelled -> {
-                        val m = activeManifest
-                        if (m != null) {
-                            val isCrit = m.mandatory || currentVersionCode < m.minimumSupportedVersionCode
-                            _status.value = UpdateStatus.Available(m, isCrit)
-                        } else {
-                            _status.value = UpdateStatus.Idle
-                        }
+                        _status.value = activeManifest?.let {
+                            UpdateStatus.Available(it, isCritical = false)
+                        } ?: UpdateStatus.Idle
                     }
-                    is DownloadState.Idle -> {}
                 }
             }
         }
 
-        // Schedule background worker if enabled
         if (preferences.settings.value.autoUpdateEnabled) {
-            BackgroundUpdateWorker.schedulePeriodicCheck(
-                context,
-                wifiOnly = preferences.settings.value.wifiOnly
-            )
+            BackgroundUpdateWorker.schedulePeriodicCheck(context, preferences.settings.value.wifiOnly)
         }
     }
 
-    fun checkForUpdates(isUserInitiated: Boolean = false) {
-        _status.value = UpdateStatus.Checking
+    fun checkForUpdates(isUserInitiated: Boolean = true) {
         scope.launch {
-            val result = checker.checkForUpdates()
+            _status.value = UpdateStatus.Checking
+            val result = checker.checkForUpdates(forceRemote = isUserInitiated)
             when (result) {
                 is CheckResult.UpdateAvailable -> {
                     activeManifest = result.manifest
-                    _status.value = UpdateStatus.Available(
-                        manifest = result.manifest,
-                        isCritical = result.isCritical
-                    )
-
-                    // Auto download if enabled
-                    if (preferences.settings.value.autoDownload && !result.isCritical) {
-                        startDownload(result.manifest)
-                    }
-
-                    // Notification for background checks or when user is away
+                    _status.value = UpdateStatus.Available(result.manifest, result.isCritical)
                     if (!isUserInitiated) {
-                        notificationManager.showUpdateAvailableNotification(
-                            manifest = result.manifest,
-                            isCritical = result.isCritical
-                        )
+                        notificationManager.showUpdateAvailableNotification(result.manifest, result.isCritical)
+                        preferences.setLastNotifiedVersion(result.manifest.latestVersionCode)
                     }
                 }
                 is CheckResult.UpToDate -> {
-                    activeManifest = null
-                    _status.value = UpdateStatus.UpToDate(
-                        versionName = result.currentVersionName,
-                        versionCode = result.currentVersionCode
-                    )
+                    _status.value = UpdateStatus.UpToDate(result.currentVersionName, result.currentVersionCode)
                 }
                 is CheckResult.Error -> {
-                    _status.value = UpdateStatus.Error(
-                        message = result.reason,
-                        isOffline = result.isOffline
-                    )
+                    _status.value = UpdateStatus.Error(result.reason, result.isOffline)
                 }
             }
         }
     }
 
-    fun startDownload(manifest: UpdateManifest? = activeManifest) {
+    fun startDownload(manifest: UpdateManifest? = null) {
         val target = manifest ?: activeManifest ?: return
         activeManifest = target
         scope.launch {
@@ -187,13 +132,19 @@ class UpdateManager(
     }
 
     fun clearCache() {
-        downloader.cleanOldUpdates()
+        downloader.cleanCache()
         downloadedApkFile = null
         activeManifest = null
         _status.value = UpdateStatus.Idle
     }
 
-    suspend fun recordHistoryEntry(versionName: String, versionCode: Int, status: String, notes: String, channel: String) {
+    suspend fun recordHistoryEntry(
+        versionName: String,
+        versionCode: Int,
+        status: String,
+        notes: String,
+        channel: String
+    ) {
         try {
             JarvisDatabase.getInstance(context).updateHistoryDao().insert(
                 UpdateHistoryEntity(
@@ -205,6 +156,8 @@ class UpdateManager(
                     channel = channel
                 )
             )
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            // Log or ignore
+        }
     }
 }

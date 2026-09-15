@@ -1,7 +1,15 @@
 package com.example.update
 
 import android.content.Context
-import androidx.work.*
+import android.util.Log
+import androidx.work.BackoffPolicy
+import androidx.work.Constraints
+import androidx.work.CoroutineWorker
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequest
+import androidx.work.WorkManager
+import androidx.work.WorkerParameters
 import java.util.concurrent.TimeUnit
 
 class BackgroundUpdateWorker(
@@ -22,17 +30,15 @@ class BackgroundUpdateWorker(
 
         if (result is CheckResult.UpdateAvailable) {
             val manifest = result.manifest
-            // Avoid duplicate notification for same version if already notified recently
             if (settings.lastNotifiedVersionCode != manifest.latestVersionCode || result.isCritical) {
                 val notifManager = UpdateNotificationManager(context)
                 notifManager.showUpdateAvailableNotification(manifest, result.isCritical)
                 prefs.setLastNotifiedVersion(manifest.latestVersionCode)
             }
 
-            // Auto-download if enabled and conditions met
             if (settings.autoDownload) {
                 val downloader = UpdateDownloader(context, prefs)
-                downloader.downloadUpdate(manifest, allowSimulationFallback = false)
+                downloader.downloadUpdate(manifest, false)
             }
         }
 
@@ -47,12 +53,15 @@ class BackgroundUpdateWorker(
                     .setRequiresBatteryNotLow(true)
                     .build()
 
-                val updateWorkRequest = PeriodicWorkRequestBuilder<BackgroundUpdateWorker>(
-                    24, TimeUnit.HOURS,
-                    6, TimeUnit.HOURS // Flex interval
+                val updateWorkRequest = PeriodicWorkRequest.Builder(
+                    BackgroundUpdateWorker::class.java,
+                    24L,
+                    TimeUnit.HOURS,
+                    6L,
+                    TimeUnit.HOURS
                 )
                     .setConstraints(constraints)
-                    .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 1, TimeUnit.HOURS)
+                    .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 1L, TimeUnit.HOURS)
                     .build()
 
                 WorkManager.getInstance(context).enqueueUniquePeriodicWork(
@@ -61,7 +70,7 @@ class BackgroundUpdateWorker(
                     updateWorkRequest
                 )
             } catch (e: Throwable) {
-                android.util.Log.w("BackgroundUpdateWorker", "WorkManager scheduling skipped: ${e.message}")
+                Log.w("BackgroundUpdateWorker", "WorkManager scheduling skipped: ${e.message}")
             }
         }
 
@@ -69,7 +78,7 @@ class BackgroundUpdateWorker(
             try {
                 WorkManager.getInstance(context).cancelUniqueWork(UpdateConfig.BACKGROUND_WORK_NAME)
             } catch (e: Throwable) {
-                android.util.Log.w("BackgroundUpdateWorker", "WorkManager cancel skipped: ${e.message}")
+                Log.w("BackgroundUpdateWorker", "WorkManager cancel skipped: ${e.message}")
             }
         }
     }

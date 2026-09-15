@@ -1,0 +1,8 @@
+package com.example.preferences
+
+typealias UserCommandPreferenceEntity = com.example.database.UserCommandPreferenceEntity
+typealias UserCommandPreferenceDao = com.example.database.UserCommandPreferenceDao
+typealias UserCommandPreferenceRepository = com.example.database.UserCommandPreferenceRepository
+typealias CommandPreferenceEntity = com.example.database.UserCommandPreferenceEntity
+typealias CommandPreferenceDao = com.example.database.UserCommandPreferenceDao
+typealias CommandPreferenceRepository = com.example.database.UserCommandPreferenceRepository

@@ -6,7 +6,7 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "update_history")
 data class UpdateHistoryEntity(
     @PrimaryKey(autoGenerate = true)
-    val id: Long = 0,
+    val id: Long = 0L,
     val versionCode: Int,
     val versionName: String,
     val installedAt: Long = System.currentTimeMillis(),

@@ -10,71 +10,25 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
-import java.util.concurrent.TimeUnit
 
-data class FeatureFlags(
-    val voiceAssistant: Boolean = true,
-    val smartHome: Boolean = true,
-    val instagramAutomation: Boolean = true,
-    val pcControl: Boolean = true,
-    val experimentalMode: Boolean = false
+class RemoteConfigManager(
+    private val context: Context,
+    private val okHttpClient: OkHttpClient = OkHttpClient()
 ) {
-    fun toJson(): JSONObject {
-        return JSONObject().apply {
-            put("voiceAssistant", voiceAssistant)
-            put("smartHome", smartHome)
-            put("instagramAutomation", instagramAutomation)
-            put("pcControl", pcControl)
-            put("experimentalMode", experimentalMode)
-        }
-    }
-
-    companion object {
-        fun fromJson(json: JSONObject?): FeatureFlags {
-            if (json == null) return FeatureFlags()
-            return FeatureFlags(
-                voiceAssistant = json.optBoolean("voiceAssistant", true),
-                smartHome = json.optBoolean("smartHome", true),
-                instagramAutomation = json.optBoolean("instagramAutomation", true),
-                pcControl = json.optBoolean("pcControl", true),
-                experimentalMode = json.optBoolean("experimentalMode", false)
-            )
-        }
-    }
-}
-
-data class MaintenanceStatus(
-    val isEnabled: Boolean = false,
-    val message: String = "JARVIS Cloud Services are undergoing scheduled maintenance. Local phone control and automation continue to operate offline."
-)
-
-data class RemoteConfig(
-    val latestVersion: String = "2.5.0",
-    val featureFlags: FeatureFlags = FeatureFlags(),
-    val maintenance: MaintenanceStatus = MaintenanceStatus(),
-    val announcement: String? = null,
-    val supportedAndroidMinSdk: Int = 24,
-    val updateChannel: String = "stable"
-)
-
-class RemoteConfigManager(private val context: Context) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences("jarvis_remote_config", Context.MODE_PRIVATE)
 
-    private val okHttpClient = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
-        .build()
-
-    private val _config = MutableStateFlow(loadLocalConfig())
+    private val _config = MutableStateFlow(loadInitialConfig())
     val config: StateFlow<RemoteConfig> = _config.asStateFlow()
 
-    private fun loadLocalConfig(): RemoteConfig {
-        val jsonStr = prefs.getString("cached_config_json", null)
-        if (!jsonStr.isNullOrBlank()) {
+    private fun loadInitialConfig(): RemoteConfig {
+        val cached = prefs.getString("cached_config_json", null)
+        if (!cached.isNullOrBlank()) {
             try {
-                return parseConfigJson(jsonStr)
-            } catch (_: Exception) {}
+                return parseConfigJson(cached)
+            } catch (e: Exception) {
+                // fallback
+            }
         }
         return RemoteConfig()
     }
@@ -85,16 +39,13 @@ class RemoteConfigManager(private val context: Context) {
         val maintObj = root.optJSONObject("maintenance")
 
         val flags = FeatureFlags.fromJson(flagsObj)
-        val maintenance = MaintenanceStatus(
-            isEnabled = maintObj?.optBoolean("enabled", false) ?: false,
-            message = maintObj?.optString("message", "Maintenance in progress")
-                ?: "Local device control is available."
-        )
+        val maintEnabled = maintObj?.optBoolean("enabled", false) ?: false
+        val maintMsg = maintObj?.optString("message", "Local device control is available.") ?: "Local device control is available."
 
         return RemoteConfig(
             latestVersion = root.optString("latestVersion", "2.5.0"),
             featureFlags = flags,
-            maintenance = maintenance,
+            maintenance = MaintenanceStatus(maintEnabled, maintMsg),
             announcement = if (root.has("announcement") && !root.isNull("announcement")) root.getString("announcement") else null,
             supportedAndroidMinSdk = root.optInt("supportedAndroidMinSdk", 24),
             updateChannel = root.optString("updateChannel", "stable")
@@ -115,8 +66,8 @@ class RemoteConfigManager(private val context: Context) {
                     _config.value = parsed
                 }
             }
-        } catch (_: Exception) {
-            // Unreachable remote config server is fine - offline-first fallback
+        } catch (e: Exception) {
+            // Keep existing cached or default config
         }
     }
 

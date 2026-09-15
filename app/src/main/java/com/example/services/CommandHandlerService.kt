@@ -4,13 +4,27 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.media.AudioManager
-import android.net.wifi.WifiManager
-import android.os.Build
 import android.os.IBinder
-import android.provider.Settings
 import android.util.Log
 import com.example.agent.ToolRegistry
-import com.example.tools.*
+import com.example.tools.AlarmTool
+import com.example.tools.BatteryTool
+import com.example.tools.BluetoothTool
+import com.example.tools.BrowserTool
+import com.example.tools.CallContactTool
+import com.example.tools.CameraTool
+import com.example.tools.CurrentTimeTool
+import com.example.tools.FlashlightTool
+import com.example.tools.InstagramTool
+import com.example.tools.NotificationTool
+import com.example.tools.OpenAppTool
+import com.example.tools.SendSmsTool
+import com.example.tools.SettingsTool
+import com.example.tools.TimerTool
+import com.example.tools.WebSearchTool
+import com.example.tools.WhatsAppTool
+import com.example.tools.WifiTool
+import com.example.tools.YouTubeTool
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -18,96 +32,28 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.util.Locale
 
-/**
- * Enumeration of system action types that can be mapped from Gemini's responses.
- */
-enum class IntentActionType {
-    TOGGLE_WIFI,
-    ENABLE_WIFI,
-    DISABLE_WIFI,
-    OPEN_WIFI_SETTINGS,
-    OPEN_APP,
-    TOGGLE_BLUETOOTH,
-    ENABLE_BLUETOOTH,
-    DISABLE_BLUETOOTH,
-    OPEN_BLUETOOTH_SETTINGS,
-    TOGGLE_FLASHLIGHT,
-    ENABLE_FLASHLIGHT,
-    DISABLE_FLASHLIGHT,
-    OPEN_CAMERA,
-    OPEN_SETTINGS,
-    SET_ALARM,
-    SET_TIMER,
-    CHECK_BATTERY,
-    CHECK_TIME,
-    ADJUST_VOLUME,
-    WEB_SEARCH,
-    CALL_CONTACT,
-    SEND_SMS,
-    WHATSAPP,
-    INSTAGRAM,
-    YOUTUBE,
-    BROWSER,
-    NOTIFICATIONS,
-    CHECK_UPDATE,
-    DOWNLOAD_UPDATE,
-    INSTALL_UPDATE,
-    SHOW_WHATS_NEW,
-    NONE
-}
-
-/**
- * Encapsulates an intent action detected from Gemini's response.
- */
-data class DetectedIntentAction(
-    val actionType: IntentActionType,
-    val parameters: Map<String, Any?> = emptyMap(),
-    val rawKeyword: String,
-    val spokenFeedback: String,
-    val confidence: Float = 1.0f
-)
-
-/**
- * Execution result of a dispatched system action.
- */
-data class CommandExecutionResult(
-    val success: Boolean,
-    val action: DetectedIntentAction,
-    val message: String,
-    val data: Map<String, Any?> = emptyMap(),
-    val toolResult: ToolResult? = null
-)
-
-/**
- * System Service and Dispatcher that maps intent-based keywords from Gemini's response
- * to actual physical Android system actions (like toggling Wi-Fi, launching apps, etc.).
- *
- * Can be executed synchronously via [executeFromResponse] or asynchronously as a
- * background Android [Service] via startService(Intent).
- */
 class CommandHandlerService : Service() {
 
     private val serviceJob = SupervisorJob()
-    private val serviceScope = CoroutineScope(Dispatchers.Main + serviceJob)
+    private val serviceScope = CoroutineScope(Dispatchers.Default + serviceJob)
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val geminiResponse = intent?.getStringExtra(EXTRA_GEMINI_RESPONSE) ?: ""
-        val userPrompt = intent?.getStringExtra(EXTRA_USER_PROMPT)
+        val userPrompt = intent?.getStringExtra(EXTRA_USER_PROMPT) ?: ""
 
         if (geminiResponse.isNotBlank()) {
             serviceScope.launch {
                 val detected = parseIntent(geminiResponse, userPrompt)
                 if (detected != null) {
-                    executeAction(applicationContext, detected)
+                    executeAction(applicationContext, detected, null)
                 }
                 stopSelf(startId)
             }
-            return START_NOT_STICKY
+        } else {
+            stopSelf(startId)
         }
-
-        stopSelf(startId)
         return START_NOT_STICKY
     }
 
@@ -117,523 +63,352 @@ class CommandHandlerService : Service() {
     }
 
     companion object {
-        private const val TAG = "CommandHandlerService"
-
+        const val TAG = "CommandHandlerService"
         const val EXTRA_GEMINI_RESPONSE = "extra_gemini_response"
         const val EXTRA_USER_PROMPT = "extra_user_prompt"
-        const val ACTION_EXECUTE_INTENT = "com.example.action.EXECUTE_INTENT"
+        const val ACTION_EXECUTE_INTENT = "com.example.ACTION_EXECUTE_INTENT"
 
-        // Regular expression to identify explicit intent or action tags like:
-        // [INTENT: TOGGLE_WIFI], [ACTION: OPEN_APP(youtube)], [INTENT: OPEN_APP app="whatsapp"]
-        private val EXPLICIT_INTENT_REGEX = Regex(
-            """\[?(?:INTENT|ACTION):\s*([A-Za-z0-9_]+)(?:(?:\s+|\s*:\s*|\s*=\s*|\()([^\n\])]*))?\]?""",
-            RegexOption.IGNORE_CASE
-        )
+        @JvmField
+        val INSTANCE = this
 
-        /**
-         * Cleans explicit intent markers (e.g. [INTENT: TOGGLE_WIFI]) from Gemini's response
-         * so the text is pristine for speech synthesis and chat UI.
-         */
+        private val EXPLICIT_INTENT_REGEX =
+            Regex("""\[(?:INTENT|ACTION):\s*([A-Z0-9_]+)(?:\s*\((.*?)\))?\]""", RegexOption.IGNORE_CASE)
+
         fun cleanResponseText(rawText: String): String {
-            return rawText
-                .replace(Regex("""\[(?:INTENT|ACTION):[^\]]+\]""", RegexOption.IGNORE_CASE), "")
-                .trim()
-                .replace(Regex("""\s{2,}"""), " ")
+            var cleaned = rawText.replace(EXPLICIT_INTENT_REGEX, "")
+            cleaned = cleaned.replace(Regex("""\{[\s\S]*?"(?:intent|action)"[\s\S]*?\}"""), "")
+            cleaned = cleaned.replace(Regex("""\[ACTION:[\s\S]*?\]""", RegexOption.IGNORE_CASE), "")
+            return cleaned.trim()
         }
 
-        /**
-         * Checks whether a text contains any intent-based keywords or markers.
-         */
-        fun containsIntentKeyword(text: String): Boolean {
-            return parseIntent(text) != null
-        }
-
-        /**
-         * Parses intent-based keywords from Gemini's response (or conversational context)
-         * into a structured [DetectedIntentAction].
-         */
         fun parseIntent(geminiResponse: String, userPrompt: String? = null): DetectedIntentAction? {
             val trimmedResponse = geminiResponse.trim()
-            val combinedText = if (userPrompt.isNullOrBlank()) {
-                trimmedResponse
-            } else {
-                "$trimmedResponse\n${userPrompt.trim()}"
-            }
+            val combinedText =
+                if (userPrompt.isNullOrBlank()) trimmedResponse else "$trimmedResponse\n${userPrompt.trim()}"
             val lowerResponse = trimmedResponse.lowercase(Locale.ROOT).replace("wi-fi", "wifi")
             val lowerCombined = combinedText.lowercase(Locale.ROOT).replace("wi-fi", "wifi")
 
-            // Tier 1: Check for explicit intent tags (e.g. [INTENT: TOGGLE_WIFI], [ACTION: OPEN_APP(youtube)])
+            // 1. Check explicit regex [ACTION: TAG(params)]
             val explicitMatch = EXPLICIT_INTENT_REGEX.find(trimmedResponse)
             if (explicitMatch != null) {
                 val intentName = explicitMatch.groupValues[1].uppercase(Locale.ROOT)
                 val rawParams = explicitMatch.groupValues.getOrNull(2)?.trim() ?: ""
-
                 val action = mapTagToAction(intentName, rawParams, trimmedResponse)
                 if (action != null) return action
             }
 
-            // Tier 2: Check for JSON payload format (e.g. {"intent": "TOGGLE_WIFI", ...} or {"action": "open_app", "app": "..."})
+            // 2. Check JSON intent
             if (trimmedResponse.contains("{") && trimmedResponse.contains("}")) {
                 val jsonStart = trimmedResponse.indexOf("{")
                 val jsonEnd = trimmedResponse.lastIndexOf("}")
-                val jsonStr = trimmedResponse.substring(jsonStart, jsonEnd + 1)
-
-                val intentMatch = Regex("""["'](?:intent|action)["']\s*:\s*["']([^"']+)["']""", RegexOption.IGNORE_CASE).find(jsonStr)
-                val intentVal = intentMatch?.groupValues?.getOrNull(1) ?: try {
-                    val json = JSONObject(jsonStr)
-                    json.optString("intent").ifBlank { json.optString("action") }
-                } catch (_: Throwable) { "" }
-
-                if (!intentVal.isNullOrBlank()) {
-                    val parsed = mapTagToAction(intentVal.uppercase(Locale.ROOT), jsonStr, trimmedResponse)
-                    if (parsed != null) return parsed
+                if (jsonEnd > jsonStart) {
+                    val jsonStr = trimmedResponse.substring(jsonStart, jsonEnd + 1)
+                    try {
+                        val json = JSONObject(jsonStr)
+                        val intentVal = json.optString("intent").ifBlank { json.optString("action") }
+                        if (intentVal.isNotBlank()) {
+                            val action = mapTagToAction(intentVal.uppercase(Locale.ROOT), jsonStr, trimmedResponse)
+                            if (action != null) return action
+                        }
+                    } catch (_: Exception) {
+                    }
                 }
             }
 
-            // Tier 3: Natural language intent-based keywords in Gemini's response
-
-            // 0. Update Assistant Keywords
-            val isUpdateCheck = lowerCombined.contains("check for update") ||
-                    lowerCombined.contains("check for updates") ||
-                    lowerCombined.contains("check update") ||
-                    lowerCombined.contains("check updates") ||
-                    lowerCombined.contains("is there a new version") ||
-                    lowerCombined.contains("any update") ||
-                    lowerCombined.contains("update status") ||
-                    lowerCombined.contains("koi update") ||
-                    lowerCombined.contains("update check karo")
-            val isDownloadUpdate = lowerCombined.contains("download the latest update") ||
-                    lowerCombined.contains("download update") ||
-                    lowerCombined.contains("download new version") ||
-                    lowerCombined.contains("update download karo")
-            val isInstallUpdate = lowerCombined.contains("update yourself") ||
-                    lowerCombined.contains("install update") ||
-                    lowerCombined.contains("install the update") ||
-                    lowerCombined.contains("update install karo")
-            val isWhatsNew = lowerCombined.contains("what's new") ||
-                    lowerCombined.contains("whats new") ||
-                    lowerCombined.contains("show me what's new") ||
-                    lowerCombined.contains("changelog") ||
-                    lowerCombined.contains("release notes")
-
-            if (isInstallUpdate) {
+            // 3. Update intents
+            if (lowerCombined.contains("install update") || lowerCombined.contains("update yourself") || lowerCombined.contains("update install karo")) {
                 return DetectedIntentAction(
-                    actionType = IntentActionType.INSTALL_UPDATE,
-                    parameters = mapOf("action" to "install"),
-                    rawKeyword = "update",
-                    spokenFeedback = "Opening Android Package Installer to approve update."
+                    IntentActionType.INSTALL_UPDATE,
+                    mapOf("action" to "install"),
+                    "update",
+                    "Opening Android Package Installer to approve update."
                 )
-            } else if (isDownloadUpdate) {
+            }
+            if (lowerCombined.contains("download update") || lowerCombined.contains("download the latest update") || lowerCombined.contains("download new version") || lowerCombined.contains("update download karo")) {
                 return DetectedIntentAction(
-                    actionType = IntentActionType.DOWNLOAD_UPDATE,
-                    parameters = mapOf("action" to "download"),
-                    rawKeyword = "update",
-                    spokenFeedback = "Starting download of JARVIS update."
+                    IntentActionType.DOWNLOAD_UPDATE,
+                    mapOf("action" to "download"),
+                    "update",
+                    "Starting download of JARVIS update."
                 )
-            } else if (isWhatsNew) {
+            }
+            if (lowerCombined.contains("what's new") || lowerCombined.contains("whats new") || lowerCombined.contains("changelog") || lowerCombined.contains("release notes")) {
                 return DetectedIntentAction(
-                    actionType = IntentActionType.SHOW_WHATS_NEW,
-                    parameters = mapOf("action" to "whats_new"),
-                    rawKeyword = "update",
-                    spokenFeedback = "Checking release notes."
+                    IntentActionType.SHOW_WHATS_NEW,
+                    mapOf("action" to "whats_new"),
+                    "update",
+                    "Checking release notes."
                 )
-            } else if (isUpdateCheck) {
+            }
+            if (lowerCombined.contains("check for update") || lowerCombined.contains("check for updates") || lowerCombined.contains("check update") || lowerCombined.contains("check updates") || lowerCombined.contains("is there a new version") || lowerCombined.contains("any update")) {
                 return DetectedIntentAction(
-                    actionType = IntentActionType.CHECK_UPDATE,
-                    parameters = mapOf("action" to "check"),
-                    rawKeyword = "update",
-                    spokenFeedback = "Checking for JARVIS updates."
+                    IntentActionType.CHECK_UPDATE,
+                    mapOf("action" to "check"),
+                    "update",
+                    "Checking for JARVIS updates."
                 )
             }
 
-            // 1. Wi-Fi Keywords
+            // 4. Wi-Fi intents
             if (matchesWifiIntent(lowerResponse, lowerCombined)) {
-                val isTurnOff = lowerCombined.contains("turn off wifi") ||
-                        lowerCombined.contains("turning off wifi") ||
-                        lowerCombined.contains("turn off the wifi") ||
-                        lowerCombined.contains("turning off the wifi") ||
-                        lowerCombined.contains("disable wifi") ||
-                        lowerCombined.contains("disabling wifi") ||
-                        lowerCombined.contains("switch off wifi") ||
-                        lowerCombined.contains("switching off wifi") ||
-                        lowerCombined.contains("wifi off") ||
-                        lowerCombined.contains("wifi band")
-                val isTurnOn = lowerCombined.contains("turn on wifi") ||
-                        lowerCombined.contains("turning on wifi") ||
-                        lowerCombined.contains("turn on the wifi") ||
-                        lowerCombined.contains("turning on the wifi") ||
-                        lowerCombined.contains("enable wifi") ||
-                        lowerCombined.contains("enabling wifi") ||
-                        lowerCombined.contains("switch on wifi") ||
-                        lowerCombined.contains("switching on wifi") ||
-                        lowerCombined.contains("wifi on") ||
-                        lowerCombined.contains("wifi chalu")
-                val isSettingsOnly = (lowerCombined.contains("wifi setting") || lowerCombined.contains("wifi settings")) && !isTurnOff && !isTurnOn
+                val isTurnOff = listOf(
+                    "turn off wifi", "turning off wifi", "disable wifi", "switch off wifi", "wifi off", "wifi band"
+                ).any { lowerCombined.contains(it) }
+                val isTurnOn = listOf(
+                    "turn on wifi", "turning on wifi", "enable wifi", "switch on wifi", "wifi on", "wifi chalu"
+                ).any { lowerCombined.contains(it) }
+                val isSettings = lowerCombined.contains("wifi setting") || lowerCombined.contains("wifi settings")
 
                 val targetAction = when {
-                    isSettingsOnly -> IntentActionType.OPEN_WIFI_SETTINGS
+                    isSettings && !isTurnOff && !isTurnOn -> IntentActionType.OPEN_WIFI_SETTINGS
                     isTurnOff -> IntentActionType.DISABLE_WIFI
                     isTurnOn -> IntentActionType.ENABLE_WIFI
                     else -> IntentActionType.TOGGLE_WIFI
                 }
-
-                return DetectedIntentAction(
-                    actionType = targetAction,
-                    parameters = mapOf("action" to when (targetAction) {
-                        IntentActionType.OPEN_WIFI_SETTINGS -> "settings"
-                        IntentActionType.ENABLE_WIFI -> "on"
-                        IntentActionType.DISABLE_WIFI -> "off"
-                        else -> "toggle"
-                    }),
-                    rawKeyword = "wifi",
-                    spokenFeedback = when (targetAction) {
-                        IntentActionType.OPEN_WIFI_SETTINGS -> "Opening Wi-Fi settings."
-                        IntentActionType.ENABLE_WIFI -> "Enabling Wi-Fi."
-                        IntentActionType.DISABLE_WIFI -> "Disabling Wi-Fi."
-                        else -> "Toggling Wi-Fi."
-                    }
-                )
+                val actionParam = when (targetAction) {
+                    IntentActionType.OPEN_WIFI_SETTINGS -> "settings"
+                    IntentActionType.ENABLE_WIFI -> "on"
+                    IntentActionType.DISABLE_WIFI -> "off"
+                    else -> "toggle"
+                }
+                val spoken = when (targetAction) {
+                    IntentActionType.OPEN_WIFI_SETTINGS -> "Opening Wi-Fi settings."
+                    IntentActionType.ENABLE_WIFI -> "Turning on Wi-Fi."
+                    IntentActionType.DISABLE_WIFI -> "Turning off Wi-Fi."
+                    else -> "Toggling Wi-Fi."
+                }
+                return DetectedIntentAction(targetAction, mapOf("action" to actionParam), "wifi", spoken)
             }
 
-            // 2. Open App Keywords
-            val appAction = detectOpenAppIntent(lowerResponse, lowerCombined)
-            if (appAction != null) return appAction
-
-            // 3. Flashlight / Torch Keywords
+            // 5. Flashlight intents
             if (matchesFlashlightIntent(lowerResponse, lowerCombined)) {
-                val isTurnOff = lowerCombined.contains("turn off flashlight") ||
-                        lowerCombined.contains("turning off flashlight") ||
-                        lowerCombined.contains("turn off the flashlight") ||
-                        lowerCombined.contains("turning off the flashlight") ||
-                        lowerCombined.contains("disable flashlight") ||
-                        lowerCombined.contains("disabling flashlight") ||
-                        lowerCombined.contains("torch off") ||
-                        lowerCombined.contains("turn off torch") ||
-                        lowerCombined.contains("turning off torch") ||
-                        lowerCombined.contains("turn off the torch") ||
-                        lowerCombined.contains("turning off the torch") ||
-                        lowerCombined.contains("torch band")
-                val isTurnOn = lowerCombined.contains("turn on flashlight") ||
-                        lowerCombined.contains("turning on flashlight") ||
-                        lowerCombined.contains("turn on the flashlight") ||
-                        lowerCombined.contains("turning on the flashlight") ||
-                        lowerCombined.contains("enable flashlight") ||
-                        lowerCombined.contains("enabling flashlight") ||
-                        lowerCombined.contains("torch on") ||
-                        lowerCombined.contains("turn on torch") ||
-                        lowerCombined.contains("turning on torch") ||
-                        lowerCombined.contains("turn on the torch") ||
-                        lowerCombined.contains("turning on the torch") ||
-                        lowerCombined.contains("torch chalu")
-
-                val type = when {
+                val isTurnOff = listOf(
+                    "turn off torch", "turn off flashlight", "disable flashlight", "torch off", "flashlight off", "torch band"
+                ).any { lowerCombined.contains(it) }
+                val isTurnOn = listOf(
+                    "turn on torch", "turn on flashlight", "enable flashlight", "torch on", "flashlight on", "torch chalu"
+                ).any { lowerCombined.contains(it) }
+                val targetAction = when {
                     isTurnOff -> IntentActionType.DISABLE_FLASHLIGHT
                     isTurnOn -> IntentActionType.ENABLE_FLASHLIGHT
                     else -> IntentActionType.TOGGLE_FLASHLIGHT
                 }
-
-                return DetectedIntentAction(
-                    actionType = type,
-                    parameters = mapOf("enabled" to if (isTurnOff) false else if (isTurnOn) true else null),
-                    rawKeyword = "flashlight",
-                    spokenFeedback = when (type) {
-                        IntentActionType.DISABLE_FLASHLIGHT -> "Turning off flashlight."
-                        IntentActionType.ENABLE_FLASHLIGHT -> "Turning on flashlight."
-                        else -> "Toggling flashlight."
-                    }
-                )
+                val enabled = when (targetAction) {
+                    IntentActionType.ENABLE_FLASHLIGHT -> true
+                    IntentActionType.DISABLE_FLASHLIGHT -> false
+                    else -> null
+                }
+                val params = if (enabled != null) mapOf("enabled" to enabled) else emptyMap<String, Any?>()
+                val spoken = when (targetAction) {
+                    IntentActionType.ENABLE_FLASHLIGHT -> "Turning on flashlight."
+                    IntentActionType.DISABLE_FLASHLIGHT -> "Turning off flashlight."
+                    else -> "Toggling flashlight."
+                }
+                return DetectedIntentAction(targetAction, params, "flashlight", spoken)
             }
 
-            // 4. Camera Keywords
-            if (matchesCameraIntent(lowerResponse, lowerCombined)) {
-                return DetectedIntentAction(
-                    actionType = IntentActionType.OPEN_CAMERA,
-                    parameters = mapOf("mode" to "photo"),
-                    rawKeyword = "camera",
-                    spokenFeedback = "Opening camera."
-                )
-            }
-
-            // 5. Bluetooth Keywords
+            // 6. Bluetooth intents
             if (matchesBluetoothIntent(lowerResponse, lowerCombined)) {
-                val isTurnOff = lowerCombined.contains("turn off bluetooth") ||
-                        lowerCombined.contains("turning off bluetooth") ||
-                        lowerCombined.contains("turn off the bluetooth") ||
-                        lowerCombined.contains("turning off the bluetooth") ||
-                        lowerCombined.contains("disable bluetooth") ||
-                        lowerCombined.contains("disabling bluetooth") ||
-                        lowerCombined.contains("switch off bluetooth") ||
-                        lowerCombined.contains("switching off bluetooth") ||
-                        lowerCombined.contains("bluetooth off") ||
-                        lowerCombined.contains("bluetooth band")
-                val isTurnOn = lowerCombined.contains("turn on bluetooth") ||
-                        lowerCombined.contains("turning on bluetooth") ||
-                        lowerCombined.contains("turn on the bluetooth") ||
-                        lowerCombined.contains("turning on the bluetooth") ||
-                        lowerCombined.contains("enable bluetooth") ||
-                        lowerCombined.contains("enabling bluetooth") ||
-                        lowerCombined.contains("switch on bluetooth") ||
-                        lowerCombined.contains("switching on bluetooth") ||
-                        lowerCombined.contains("bluetooth on") ||
-                        lowerCombined.contains("bluetooth chalu")
-                val isSettingsOnly = (lowerCombined.contains("bluetooth setting") || lowerCombined.contains("bluetooth settings")) && !isTurnOff && !isTurnOn
+                val isTurnOff = listOf(
+                    "turn off bluetooth", "disable bluetooth", "bluetooth off", "bluetooth band"
+                ).any { lowerCombined.contains(it) }
+                val isTurnOn = listOf(
+                    "turn on bluetooth", "enable bluetooth", "bluetooth on", "bluetooth chalu"
+                ).any { lowerCombined.contains(it) }
+                val isSettings = lowerCombined.contains("bluetooth setting") || lowerCombined.contains("bluetooth settings")
 
                 val targetAction = when {
-                    isSettingsOnly -> IntentActionType.OPEN_BLUETOOTH_SETTINGS
+                    isSettings && !isTurnOff && !isTurnOn -> IntentActionType.OPEN_BLUETOOTH_SETTINGS
                     isTurnOff -> IntentActionType.DISABLE_BLUETOOTH
                     isTurnOn -> IntentActionType.ENABLE_BLUETOOTH
                     else -> IntentActionType.TOGGLE_BLUETOOTH
                 }
-
-                return DetectedIntentAction(
-                    actionType = targetAction,
-                    parameters = mapOf("action" to when (targetAction) {
-                        IntentActionType.OPEN_BLUETOOTH_SETTINGS -> "settings"
-                        IntentActionType.ENABLE_BLUETOOTH -> "on"
-                        IntentActionType.DISABLE_BLUETOOTH -> "off"
-                        else -> "toggle"
-                    }),
-                    rawKeyword = "bluetooth",
-                    spokenFeedback = when (targetAction) {
-                        IntentActionType.OPEN_BLUETOOTH_SETTINGS -> "Opening Bluetooth settings."
-                        IntentActionType.ENABLE_BLUETOOTH -> "Enabling Bluetooth."
-                        IntentActionType.DISABLE_BLUETOOTH -> "Disabling Bluetooth."
-                        else -> "Toggling Bluetooth."
-                    }
-                )
+                val actionParam = when (targetAction) {
+                    IntentActionType.OPEN_BLUETOOTH_SETTINGS -> "settings"
+                    IntentActionType.ENABLE_BLUETOOTH -> "on"
+                    IntentActionType.DISABLE_BLUETOOTH -> "off"
+                    else -> "toggle"
+                }
+                val spoken = when (targetAction) {
+                    IntentActionType.OPEN_BLUETOOTH_SETTINGS -> "Opening Bluetooth settings."
+                    IntentActionType.ENABLE_BLUETOOTH -> "Turning on Bluetooth."
+                    IntentActionType.DISABLE_BLUETOOTH -> "Turning off Bluetooth."
+                    else -> "Toggling Bluetooth."
+                }
+                return DetectedIntentAction(targetAction, mapOf("action" to actionParam), "bluetooth", spoken)
             }
 
-            // 6. Settings Keywords
-            if (matchesSettingsIntent(lowerResponse, lowerCombined)) {
-                return DetectedIntentAction(
-                    actionType = IntentActionType.OPEN_SETTINGS,
-                    parameters = mapOf("settingType" to "all"),
-                    rawKeyword = "settings",
-                    spokenFeedback = "Opening Settings."
-                )
+            // 7. Camera intents
+            if (matchesCameraIntent(lowerResponse, lowerCombined)) {
+                val isFront = lowerCombined.contains("front camera") || lowerCombined.contains("selfie")
+                val isVideo = lowerCombined.contains("record video") || lowerCombined.contains("record a video")
+                val mode = if (isVideo) "video" else if (isFront) "front" else "photo"
+                return DetectedIntentAction(IntentActionType.OPEN_CAMERA, mapOf("mode" to mode), "camera", "Opening camera.")
             }
 
-            // 7. Battery Check
+            // 8. Volume intents
+            if (lowerCombined.contains("volume up") || lowerCombined.contains("increase volume") || lowerCombined.contains("raise volume")) {
+                return DetectedIntentAction(IntentActionType.ADJUST_VOLUME, mapOf("direction" to "up"), "volume", "Increasing volume.")
+            }
+            if (lowerCombined.contains("volume down") || lowerCombined.contains("decrease volume") || lowerCombined.contains("lower volume")) {
+                return DetectedIntentAction(IntentActionType.ADJUST_VOLUME, mapOf("direction" to "down"), "volume", "Decreasing volume.")
+            }
+            if (lowerCombined.contains("mute audio") || lowerCombined.contains("mute phone") || lowerCombined.contains("mute volume") || lowerCombined.equals("mute", ignoreCase = true)) {
+                return DetectedIntentAction(IntentActionType.ADJUST_VOLUME, mapOf("direction" to "mute"), "volume", "Muting audio.")
+            }
+
+            // 9. Battery & Time intents
             if (matchesBatteryIntent(lowerResponse, lowerCombined)) {
-                return DetectedIntentAction(
-                    actionType = IntentActionType.CHECK_BATTERY,
-                    rawKeyword = "battery",
-                    spokenFeedback = "Checking battery status."
-                )
+                return DetectedIntentAction(IntentActionType.CHECK_BATTERY, emptyMap(), "battery", "Checking battery status.")
+            }
+            if (matchesTimeIntent(lowerResponse, lowerCombined)) {
+                return DetectedIntentAction(IntentActionType.CHECK_TIME, emptyMap(), "time", "Checking current time.")
             }
 
-            // 8. Time Check
-            if (matchesTimeIntent(lowerResponse, lowerCombined)) {
-                return DetectedIntentAction(
-                    actionType = IntentActionType.CHECK_TIME,
-                    rawKeyword = "time",
-                    spokenFeedback = "Checking current time."
-                )
+            // 10. Settings intent
+            if (matchesSettingsIntent(lowerResponse, lowerCombined)) {
+                return DetectedIntentAction(IntentActionType.OPEN_SETTINGS, mapOf("settingType" to "all"), "settings", "Opening Settings.")
+            }
+
+            // 11. Open App / specific apps
+            val appAction = detectOpenAppIntent(lowerResponse, lowerCombined)
+            if (appAction != null) return appAction
+
+            // 12. Call contact intent
+            if (lowerCombined.startsWith("call ") || lowerCombined.contains("call to ") || lowerCombined.contains("make a phone call")) {
+                val name = lowerCombined.replace(Regex("""^(?:please\s+)?(?:call|phone|make a call to)\s+"""), "").trim()
+                if (name.isNotBlank()) {
+                    return DetectedIntentAction(IntentActionType.CALL_CONTACT, mapOf("contactName" to name), "call", "Calling $name.")
+                }
+            }
+
+            // 13. Send SMS intent
+            if (lowerCombined.startsWith("send sms") || lowerCombined.startsWith("text ") || lowerCombined.contains("send a message")) {
+                return DetectedIntentAction(IntentActionType.SEND_SMS, mapOf("message" to trimmedResponse), "sms", "Preparing to send text message.")
+            }
+
+            // 14. Web search intent
+            if (lowerCombined.startsWith("search for ") || lowerCombined.startsWith("google ") || lowerCombined.startsWith("search web for ")) {
+                val query = lowerCombined.replace(Regex("""^(?:search for|google|search web for)\s+"""), "").trim()
+                return DetectedIntentAction(IntentActionType.WEB_SEARCH, mapOf("query" to query), "search", "Searching for $query.")
             }
 
             return null
         }
 
-        private fun mapTagToAction(tag: String, params: String, fullText: String): DetectedIntentAction? {
-            val cleanParams = params.removePrefix("(").removeSuffix(")").trim()
-
-            return when (tag) {
-                "TOGGLE_WIFI" -> DetectedIntentAction(
-                    actionType = IntentActionType.TOGGLE_WIFI,
-                    parameters = mapOf("action" to "toggle"),
-                    rawKeyword = tag,
-                    spokenFeedback = "Toggling Wi-Fi."
-                )
-                "ENABLE_WIFI", "WIFI_ON" -> DetectedIntentAction(
-                    actionType = IntentActionType.ENABLE_WIFI,
-                    parameters = mapOf("action" to "on"),
-                    rawKeyword = tag,
-                    spokenFeedback = "Turning on Wi-Fi."
-                )
-                "DISABLE_WIFI", "WIFI_OFF" -> DetectedIntentAction(
-                    actionType = IntentActionType.DISABLE_WIFI,
-                    parameters = mapOf("action" to "off"),
-                    rawKeyword = tag,
-                    spokenFeedback = "Turning off Wi-Fi."
-                )
-                "OPEN_WIFI_SETTINGS" -> DetectedIntentAction(
-                    actionType = IntentActionType.OPEN_WIFI_SETTINGS,
-                    parameters = mapOf("settingType" to "wifi"),
-                    rawKeyword = tag,
-                    spokenFeedback = "Opening Wi-Fi settings."
-                )
-                "OPEN_APP", "LAUNCH_APP" -> {
-                    // Extract app name from params (e.g. app="youtube" or youtube)
-                    val appName = extractParamValue(cleanParams, "app")
-                        .ifBlank { extractParamValue(cleanParams, "name") }
-                        .ifBlank { cleanParams.replace("\"", "").replace("'", "").trim() }
-                    DetectedIntentAction(
-                        actionType = IntentActionType.OPEN_APP,
-                        parameters = mapOf("appName" to appName),
-                        rawKeyword = tag,
-                        spokenFeedback = "Opening ${appName.replaceFirstChar { it.uppercase() }}."
-                    )
+        private fun mapTagToAction(tag: String, paramsStr: String, fullText: String): DetectedIntentAction? {
+            val upperTag = tag.uppercase(Locale.ROOT)
+            return when {
+                upperTag.contains("WIFI") -> {
+                    val isOff = upperTag.contains("OFF") || upperTag.contains("DISABLE") || paramsStr.contains("off")
+                    val isSettings = upperTag.contains("SETTING") || paramsStr.contains("setting")
+                    val type = if (isSettings) IntentActionType.OPEN_WIFI_SETTINGS else if (isOff) IntentActionType.DISABLE_WIFI else IntentActionType.ENABLE_WIFI
+                    val act = if (isSettings) "settings" else if (isOff) "off" else "on"
+                    DetectedIntentAction(type, mapOf("action" to act), "wifi", "Managing Wi-Fi.")
                 }
-                "TOGGLE_FLASHLIGHT" -> DetectedIntentAction(
-                    actionType = IntentActionType.TOGGLE_FLASHLIGHT,
-                    rawKeyword = tag,
-                    spokenFeedback = "Toggling flashlight."
-                )
-                "ENABLE_FLASHLIGHT", "FLASHLIGHT_ON", "TORCH_ON" -> DetectedIntentAction(
-                    actionType = IntentActionType.ENABLE_FLASHLIGHT,
-                    parameters = mapOf("enabled" to true),
-                    rawKeyword = tag,
-                    spokenFeedback = "Turning on flashlight."
-                )
-                "DISABLE_FLASHLIGHT", "FLASHLIGHT_OFF", "TORCH_OFF" -> DetectedIntentAction(
-                    actionType = IntentActionType.DISABLE_FLASHLIGHT,
-                    parameters = mapOf("enabled" to false),
-                    rawKeyword = tag,
-                    spokenFeedback = "Turning off flashlight."
-                )
-                "OPEN_CAMERA" -> DetectedIntentAction(
-                    actionType = IntentActionType.OPEN_CAMERA,
-                    parameters = mapOf("mode" to "photo"),
-                    rawKeyword = tag,
-                    spokenFeedback = "Opening camera."
-                )
-                "OPEN_SETTINGS" -> {
-                    val settingType = extractParamValue(cleanParams, "type").ifBlank { "all" }
-                    DetectedIntentAction(
-                        actionType = IntentActionType.OPEN_SETTINGS,
-                        parameters = mapOf("settingType" to settingType),
-                        rawKeyword = tag,
-                        spokenFeedback = "Opening Settings."
-                    )
+                upperTag.contains("BLUETOOTH") -> {
+                    val isOff = upperTag.contains("OFF") || upperTag.contains("DISABLE") || paramsStr.contains("off")
+                    val isSettings = upperTag.contains("SETTING") || paramsStr.contains("setting")
+                    val type = if (isSettings) IntentActionType.OPEN_BLUETOOTH_SETTINGS else if (isOff) IntentActionType.DISABLE_BLUETOOTH else IntentActionType.ENABLE_BLUETOOTH
+                    val act = if (isSettings) "settings" else if (isOff) "off" else "on"
+                    DetectedIntentAction(type, mapOf("action" to act), "bluetooth", "Managing Bluetooth.")
                 }
-                "TOGGLE_BLUETOOTH" -> DetectedIntentAction(
-                    actionType = IntentActionType.TOGGLE_BLUETOOTH,
-                    parameters = mapOf("action" to "toggle"),
-                    rawKeyword = tag,
-                    spokenFeedback = "Toggling Bluetooth."
-                )
-                "ENABLE_BLUETOOTH", "BLUETOOTH_ON" -> DetectedIntentAction(
-                    actionType = IntentActionType.ENABLE_BLUETOOTH,
-                    parameters = mapOf("action" to "on"),
-                    rawKeyword = tag,
-                    spokenFeedback = "Turning on Bluetooth."
-                )
-                "DISABLE_BLUETOOTH", "BLUETOOTH_OFF" -> DetectedIntentAction(
-                    actionType = IntentActionType.DISABLE_BLUETOOTH,
-                    parameters = mapOf("action" to "off"),
-                    rawKeyword = tag,
-                    spokenFeedback = "Turning off Bluetooth."
-                )
-                "OPEN_BLUETOOTH_SETTINGS" -> DetectedIntentAction(
-                    actionType = IntentActionType.OPEN_BLUETOOTH_SETTINGS,
-                    parameters = mapOf("action" to "settings"),
-                    rawKeyword = tag,
-                    spokenFeedback = "Opening Bluetooth settings."
-                )
-                "CHECK_BATTERY" -> DetectedIntentAction(
-                    actionType = IntentActionType.CHECK_BATTERY,
-                    rawKeyword = tag,
-                    spokenFeedback = "Checking battery."
-                )
-                "CHECK_TIME" -> DetectedIntentAction(
-                    actionType = IntentActionType.CHECK_TIME,
-                    rawKeyword = tag,
-                    spokenFeedback = "Checking time."
-                )
+                upperTag.contains("FLASHLIGHT") || upperTag.contains("TORCH") -> {
+                    val isOff = upperTag.contains("OFF") || upperTag.contains("DISABLE") || paramsStr.contains("off") || paramsStr.contains("false")
+                    val type = if (isOff) IntentActionType.DISABLE_FLASHLIGHT else IntentActionType.ENABLE_FLASHLIGHT
+                    DetectedIntentAction(type, mapOf("enabled" to !isOff), "flashlight", if (isOff) "Turning off flashlight." else "Turning on flashlight.")
+                }
+                upperTag.contains("CAMERA") -> {
+                    DetectedIntentAction(IntentActionType.OPEN_CAMERA, mapOf("mode" to "photo"), "camera", "Opening camera.")
+                }
+                upperTag.contains("BATTERY") -> {
+                    DetectedIntentAction(IntentActionType.CHECK_BATTERY, emptyMap(), "battery", "Checking battery status.")
+                }
+                upperTag.contains("TIME") -> {
+                    DetectedIntentAction(IntentActionType.CHECK_TIME, emptyMap(), "time", "Checking current time.")
+                }
+                upperTag.contains("ALARM") -> {
+                    DetectedIntentAction(IntentActionType.SET_ALARM, emptyMap(), "alarm", "Setting alarm.")
+                }
+                upperTag.contains("TIMER") -> {
+                    DetectedIntentAction(IntentActionType.SET_TIMER, emptyMap(), "timer", "Setting timer.")
+                }
+                upperTag.contains("VOLUME") -> {
+                    val dir = if (upperTag.contains("DOWN") || paramsStr.contains("down")) "down" else if (upperTag.contains("MUTE") || paramsStr.contains("mute")) "mute" else "up"
+                    DetectedIntentAction(IntentActionType.ADJUST_VOLUME, mapOf("direction" to dir), "volume", "Adjusting volume.")
+                }
+                upperTag.contains("UPDATE") -> {
+                    val act = if (upperTag.contains("INSTALL") || paramsStr.contains("install")) IntentActionType.INSTALL_UPDATE
+                    else if (upperTag.contains("DOWNLOAD") || paramsStr.contains("download")) IntentActionType.DOWNLOAD_UPDATE
+                    else if (upperTag.contains("WHATS_NEW") || paramsStr.contains("whats_new")) IntentActionType.SHOW_WHATS_NEW
+                    else IntentActionType.CHECK_UPDATE
+                    DetectedIntentAction(act, mapOf("action" to "check"), "update", "Checking updates.")
+                }
+                upperTag.contains("OPEN") || upperTag.contains("APP") -> {
+                    val appName = extractParamValue(paramsStr, "appName").ifBlank { extractParamValue(paramsStr, "app") }.ifBlank { "app" }
+                    DetectedIntentAction(IntentActionType.OPEN_APP, mapOf("appName" to appName), "open_app", "Opening $appName.")
+                }
                 else -> null
             }
         }
 
-        private fun extractParamValue(params: String, key: String): String {
-            val regex = Regex("""["']?$key["']?\s*[:=]\s*["']?([^"',\s)}]+)["']?""", RegexOption.IGNORE_CASE)
-            val match = regex.find(params)
-            return match?.groupValues?.getOrNull(1)?.trim() ?: ""
+        private fun extractParamValue(paramsStr: String, key: String): String {
+            try {
+                if (paramsStr.startsWith("{")) {
+                    val json = JSONObject(paramsStr)
+                    return json.optString(key, "")
+                }
+            } catch (_: Exception) {
+            }
+            val regex = Regex("""$key\s*[:=]\s*["']?([^"',\)]+)["']?""", RegexOption.IGNORE_CASE)
+            return regex.find(paramsStr)?.groupValues?.getOrNull(1)?.trim() ?: ""
         }
 
-        private fun matchesWifiIntent(response: String, combined: String): Boolean {
-            return response.contains("wifi") || combined.contains("wifi")
-        }
+        private fun matchesWifiIntent(response: String, combined: String): Boolean =
+            listOf("wifi", "wi-fi", "internet connection", "wireless network").any { combined.contains(it) }
 
-        private fun matchesFlashlightIntent(response: String, combined: String): Boolean {
-            return response.contains("flashlight") || response.contains("torch") ||
-                    combined.contains("flashlight") || combined.contains("torch")
-        }
+        private fun matchesFlashlightIntent(response: String, combined: String): Boolean =
+            listOf("flashlight", "torch", "flash light").any { combined.contains(it) }
 
-        private fun matchesCameraIntent(response: String, combined: String): Boolean {
-            return response.contains("opening camera") || response.contains("launching camera") ||
-                    combined.contains("open camera") || combined.contains("take a photo") ||
-                    combined.contains("take photo") || combined.contains("camera kholo")
-        }
+        private fun matchesCameraIntent(response: String, combined: String): Boolean =
+            listOf("open camera", "take photo", "take a picture", "take selfie", "open the camera", "record video").any { combined.contains(it) }
 
-        private fun matchesBluetoothIntent(response: String, combined: String): Boolean {
-            return response.contains("bluetooth") || combined.contains("bluetooth")
-        }
+        private fun matchesBluetoothIntent(response: String, combined: String): Boolean =
+            listOf("bluetooth", "bt connect", "bt device").any { combined.contains(it) }
 
-        private fun matchesSettingsIntent(response: String, combined: String): Boolean {
-            return response.contains("opening settings") || response.contains("opened settings") ||
-                    combined.contains("open settings") || combined.contains("settings kholo")
-        }
+        private fun matchesSettingsIntent(response: String, combined: String): Boolean =
+            listOf("open settings", "system settings", "device settings", "phone settings").any { combined.contains(it) }
 
-        private fun matchesBatteryIntent(response: String, combined: String): Boolean {
-            return response.contains("battery is at") || response.contains("checking battery") ||
-                    combined.contains("battery kitni") || combined.contains("battery check") ||
-                    combined.contains("battery status") || combined.contains("battery batao")
-        }
+        private fun matchesBatteryIntent(response: String, combined: String): Boolean =
+            listOf("battery percentage", "battery level", "battery status", "check battery", "how much battery").any { combined.contains(it) }
 
-        private fun matchesTimeIntent(response: String, combined: String): Boolean {
-            return response.contains("current time is") || response.contains("checking time") ||
-                    combined.contains("time kya hua") || combined.contains("kitne baje") ||
-                    combined.contains("time batao") || combined.contains("what time is it")
-        }
+        private fun matchesTimeIntent(response: String, combined: String): Boolean =
+            listOf("what time is it", "current time", "what's the time", "tell me the time", "what day is it", "today's date").any { combined.contains(it) }
 
         private fun detectOpenAppIntent(response: String, combined: String): DetectedIntentAction? {
-            // Check known app keywords
-            val knownApps = listOf(
-                "youtube", "whatsapp", "chrome", "browser", "instagram", "spotify",
-                "maps", "google maps", "gmail", "calculator", "calc", "clock",
-                "calendar", "photos", "gallery", "messages", "sms", "phone",
-                "dialer", "telegram", "twitter", "x", "keep", "notes", "settings",
-                "files", "netflix"
-            )
-
-            // 1. "Opening YouTube", "Launching WhatsApp", etc.
-            val openingRegex = Regex("""(?:opening|launching|starting|opened)\s+([a-zA-Z0-9\s]+?)(?:\s+app|\s+for\s+you|\.|$|\!)""", RegexOption.IGNORE_CASE)
-            val match = openingRegex.find(response)
+            if (combined.contains("whatsapp")) {
+                return DetectedIntentAction(IntentActionType.WHATSAPP, mapOf("appName" to "WhatsApp"), "whatsapp", "Opening WhatsApp.")
+            }
+            if (combined.contains("youtube")) {
+                return DetectedIntentAction(IntentActionType.YOUTUBE, mapOf("appName" to "YouTube"), "youtube", "Opening YouTube.")
+            }
+            if (combined.contains("instagram")) {
+                return DetectedIntentAction(IntentActionType.INSTAGRAM, mapOf("appName" to "Instagram"), "instagram", "Opening Instagram.")
+            }
+            if (combined.contains("open chrome") || combined.contains("open browser")) {
+                return DetectedIntentAction(IntentActionType.BROWSER, mapOf("appName" to "Browser"), "browser", "Opening browser.")
+            }
+            val openRegex = Regex("""(?:open|launch|start)\s+(?:the\s+)?([a-zA-Z0-9\s]+?)(?:\s+app)?$""", RegexOption.IGNORE_CASE)
+            val match = openRegex.find(combined.trim())
             if (match != null) {
-                val candidate = match.groupValues[1].trim().lowercase(Locale.ROOT)
-                val matchedApp = knownApps.firstOrNull { candidate.contains(it) || it.contains(candidate) }
-                if (matchedApp != null) {
-                    return DetectedIntentAction(
-                        actionType = IntentActionType.OPEN_APP,
-                        parameters = mapOf("appName" to matchedApp),
-                        rawKeyword = matchedApp,
-                        spokenFeedback = "Opening ${matchedApp.replaceFirstChar { it.uppercase() }}."
-                    )
+                val appName = match.groupValues[1].trim()
+                if (appName.isNotBlank() && !listOf("settings", "camera", "wifi", "bluetooth", "torch", "flashlight").contains(appName.lowercase(Locale.ROOT))) {
+                    return DetectedIntentAction(IntentActionType.OPEN_APP, mapOf("appName" to appName), "open_app", "Opening $appName.")
                 }
             }
-
-            // 2. User prompt commands like "open youtube", "launch chrome", "whatsapp kholo"
-            val promptRegex = Regex("""(?:open|launch|kholo)\s+([a-zA-Z0-9\s]+)$""", RegexOption.IGNORE_CASE)
-            val promptMatch = promptRegex.find(combined)
-            if (promptMatch != null) {
-                val candidate = promptMatch.groupValues[1].trim().lowercase(Locale.ROOT)
-                val matchedApp = knownApps.firstOrNull { candidate.contains(it) || it.contains(candidate) }
-                if (matchedApp != null) {
-                    return DetectedIntentAction(
-                        actionType = IntentActionType.OPEN_APP,
-                        parameters = mapOf("appName" to matchedApp),
-                        rawKeyword = matchedApp,
-                        spokenFeedback = "Opening ${matchedApp.replaceFirstChar { it.uppercase() }}."
-                    )
-                }
-            }
-
             return null
         }
 
-        /**
-         * Executes the mapped system action on Android using the appropriate system APIs or tools.
-         */
         suspend fun executeAction(
             context: Context,
             detectedAction: DetectedIntentAction,
@@ -642,288 +417,72 @@ class CommandHandlerService : Service() {
             Log.d(TAG, "Executing system action: ${detectedAction.actionType} with params: ${detectedAction.parameters}")
             val appContext = context.applicationContext
 
-            return when (detectedAction.actionType) {
-                IntentActionType.TOGGLE_WIFI,
-                IntentActionType.ENABLE_WIFI,
-                IntentActionType.DISABLE_WIFI,
-                IntentActionType.OPEN_WIFI_SETTINGS -> {
-                    val wifiTool = toolRegistry?.getTool("WifiTool") ?: WifiTool()
-                    val result = wifiTool.execute(appContext, detectedAction.parameters)
-                    CommandExecutionResult(
-                        success = result.success,
-                        action = detectedAction,
-                        message = result.message,
-                        data = result.data ?: emptyMap(),
-                        toolResult = result
-                    )
+            if (detectedAction.actionType == IntentActionType.ADJUST_VOLUME) {
+                val audioManager = appContext.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+                    ?: return CommandExecutionResult(false, detectedAction, "Audio service unavailable.")
+                val dir = detectedAction.parameters["direction"]?.toString() ?: "up"
+                when (dir) {
+                    "up" -> audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI)
+                    "down" -> audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI)
+                    "mute" -> audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, AudioManager.FLAG_SHOW_UI)
+                    "unmute" -> audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, AudioManager.FLAG_SHOW_UI)
                 }
-
-                IntentActionType.OPEN_APP -> {
-                    val openAppTool = toolRegistry?.getTool("OpenAppTool") ?: OpenAppTool()
-                    val result = openAppTool.execute(appContext, detectedAction.parameters)
-                    CommandExecutionResult(
-                        success = result.success,
-                        action = detectedAction,
-                        message = result.message,
-                        data = result.data ?: emptyMap(),
-                        toolResult = result
-                    )
-                }
-
-                IntentActionType.TOGGLE_FLASHLIGHT,
-                IntentActionType.ENABLE_FLASHLIGHT,
-                IntentActionType.DISABLE_FLASHLIGHT -> {
-                    val flashlightTool = toolRegistry?.getTool("FlashlightTool") ?: FlashlightTool()
-                    val result = flashlightTool.execute(appContext, detectedAction.parameters)
-                    CommandExecutionResult(
-                        success = result.success,
-                        action = detectedAction,
-                        message = result.message,
-                        data = result.data ?: emptyMap(),
-                        toolResult = result
-                    )
-                }
-
-                IntentActionType.OPEN_CAMERA -> {
-                    val cameraTool = toolRegistry?.getTool("CameraTool") ?: CameraTool()
-                    val result = cameraTool.execute(appContext, detectedAction.parameters)
-                    CommandExecutionResult(
-                        success = result.success,
-                        action = detectedAction,
-                        message = result.message,
-                        data = result.data ?: emptyMap(),
-                        toolResult = result
-                    )
-                }
-
-                IntentActionType.TOGGLE_BLUETOOTH,
-                IntentActionType.ENABLE_BLUETOOTH,
-                IntentActionType.DISABLE_BLUETOOTH,
-                IntentActionType.OPEN_BLUETOOTH_SETTINGS -> {
-                    val bluetoothTool = toolRegistry?.getTool("BluetoothTool") ?: BluetoothTool()
-                    val result = bluetoothTool.execute(appContext, detectedAction.parameters)
-                    CommandExecutionResult(
-                        success = result.success,
-                        action = detectedAction,
-                        message = result.message,
-                        data = result.data ?: emptyMap(),
-                        toolResult = result
-                    )
-                }
-
-                IntentActionType.OPEN_SETTINGS -> {
-                    val settingsTool = toolRegistry?.getTool("SettingsTool") ?: SettingsTool()
-                    val result = settingsTool.execute(appContext, detectedAction.parameters)
-                    CommandExecutionResult(
-                        success = result.success,
-                        action = detectedAction,
-                        message = result.message,
-                        data = result.data ?: emptyMap(),
-                        toolResult = result
-                    )
-                }
-
-                IntentActionType.CHECK_BATTERY -> {
-                    val batteryTool = toolRegistry?.getTool("BatteryTool") ?: BatteryTool()
-                    val result = batteryTool.execute(appContext, emptyMap())
-                    CommandExecutionResult(
-                        success = result.success,
-                        action = detectedAction,
-                        message = result.message,
-                        data = result.data ?: emptyMap(),
-                        toolResult = result
-                    )
-                }
-
-                IntentActionType.CHECK_TIME -> {
-                    val timeTool = toolRegistry?.getTool("CurrentTimeTool") ?: CurrentTimeTool()
-                    val result = timeTool.execute(appContext, emptyMap())
-                    CommandExecutionResult(
-                        success = result.success,
-                        action = detectedAction,
-                        message = result.message,
-                        data = result.data ?: emptyMap(),
-                        toolResult = result
-                    )
-                }
-
-                IntentActionType.ADJUST_VOLUME -> {
-                    val audioManager = appContext.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
-                    if (audioManager != null) {
-                        val dir = detectedAction.parameters["direction"]?.toString() ?: "up"
-                        val adjustDirection = if (dir == "down") AudioManager.ADJUST_LOWER else AudioManager.ADJUST_RAISE
-                        audioManager.adjustStreamVolume(AudioManager.STREAM_MUSIC, adjustDirection, AudioManager.FLAG_SHOW_UI)
-                        CommandExecutionResult(
-                            success = true,
-                            action = detectedAction,
-                            message = "Volume adjusted.",
-                            data = mapOf("direction" to dir)
-                        )
-                    } else {
-                        CommandExecutionResult(
-                            success = false,
-                            action = detectedAction,
-                            message = "Audio service unavailable."
-                        )
-                    }
-                }
-
-                IntentActionType.SET_ALARM -> {
-                    val alarmTool = toolRegistry?.getTool("AlarmTool") ?: AlarmTool()
-                    val result = alarmTool.execute(appContext, detectedAction.parameters)
-                    CommandExecutionResult(
-                        success = result.success,
-                        action = detectedAction,
-                        message = result.message,
-                        data = result.data ?: emptyMap(),
-                        toolResult = result
-                    )
-                }
-
-                IntentActionType.SET_TIMER -> {
-                    val timerTool = toolRegistry?.getTool("TimerTool") ?: TimerTool()
-                    val result = timerTool.execute(appContext, detectedAction.parameters)
-                    CommandExecutionResult(
-                        success = result.success,
-                        action = detectedAction,
-                        message = result.message,
-                        data = result.data ?: emptyMap(),
-                        toolResult = result
-                    )
-                }
-
-                IntentActionType.WEB_SEARCH -> {
-                    val searchTool = toolRegistry?.getTool("WebSearchTool") ?: WebSearchTool()
-                    val result = searchTool.execute(appContext, detectedAction.parameters)
-                    CommandExecutionResult(
-                        success = result.success,
-                        action = detectedAction,
-                        message = result.message,
-                        data = result.data ?: emptyMap(),
-                        toolResult = result
-                    )
-                }
-
-                IntentActionType.CALL_CONTACT -> {
-                    val callTool = toolRegistry?.getTool("CallContactTool") ?: CallContactTool()
-                    val result = callTool.execute(appContext, detectedAction.parameters)
-                    CommandExecutionResult(
-                        success = result.success,
-                        action = detectedAction,
-                        message = result.message,
-                        data = result.data ?: emptyMap(),
-                        toolResult = result
-                    )
-                }
-
-                IntentActionType.SEND_SMS -> {
-                    val smsTool = toolRegistry?.getTool("SendSmsTool") ?: SendSmsTool()
-                    val result = smsTool.execute(appContext, detectedAction.parameters)
-                    CommandExecutionResult(
-                        success = result.success,
-                        action = detectedAction,
-                        message = result.message,
-                        data = result.data,
-                        toolResult = result
-                    )
-                }
-
-                IntentActionType.WHATSAPP -> {
-                    val waTool = toolRegistry?.getTool("WhatsAppTool") ?: WhatsAppTool()
-                    val result = waTool.execute(appContext, detectedAction.parameters)
-                    CommandExecutionResult(
-                        success = result.success,
-                        action = detectedAction,
-                        message = result.message,
-                        data = result.data,
-                        toolResult = result
-                    )
-                }
-
-                IntentActionType.INSTAGRAM -> {
-                    val instaTool = toolRegistry?.getTool("InstagramTool") ?: InstagramTool()
-                    val result = instaTool.execute(appContext, detectedAction.parameters)
-                    CommandExecutionResult(
-                        success = result.success,
-                        action = detectedAction,
-                        message = result.message,
-                        data = result.data,
-                        toolResult = result
-                    )
-                }
-
-                IntentActionType.YOUTUBE -> {
-                    val ytTool = toolRegistry?.getTool("YouTubeTool") ?: YouTubeTool()
-                    val result = ytTool.execute(appContext, detectedAction.parameters)
-                    CommandExecutionResult(
-                        success = result.success,
-                        action = detectedAction,
-                        message = result.message,
-                        data = result.data,
-                        toolResult = result
-                    )
-                }
-
-                IntentActionType.BROWSER -> {
-                    val browserTool = toolRegistry?.getTool("BrowserTool") ?: BrowserTool()
-                    val result = browserTool.execute(appContext, detectedAction.parameters)
-                    CommandExecutionResult(
-                        success = result.success,
-                        action = detectedAction,
-                        message = result.message,
-                        data = result.data,
-                        toolResult = result
-                    )
-                }
-
-                IntentActionType.NOTIFICATIONS -> {
-                    val notifTool = toolRegistry?.getTool("NotificationTool") ?: NotificationTool()
-                    val result = notifTool.execute(appContext, detectedAction.parameters)
-                    CommandExecutionResult(
-                        success = result.success,
-                        action = detectedAction,
-                        message = result.message,
-                        data = result.data,
-                        toolResult = result
-                    )
-                }
-
-                IntentActionType.CHECK_UPDATE,
-                IntentActionType.DOWNLOAD_UPDATE,
-                IntentActionType.INSTALL_UPDATE,
-                IntentActionType.SHOW_WHATS_NEW -> {
-                    val updateTool = toolRegistry?.getTool("app_update")
-                    if (updateTool != null) {
-                        val result = updateTool.execute(appContext, detectedAction.parameters)
-                        CommandExecutionResult(
-                            success = result.success,
-                            action = detectedAction,
-                            message = result.message,
-                            data = result.data,
-                            toolResult = result
-                        )
-                    } else {
-                        CommandExecutionResult(
-                            success = false,
-                            action = detectedAction,
-                            message = "Update system is initializing. Please try again shortly."
-                        )
-                    }
-                }
-
-                IntentActionType.NONE -> {
-                    CommandExecutionResult(
-                        success = true,
-                        action = detectedAction,
-                        message = "No system action required."
-                    )
-                }
+                return CommandExecutionResult(true, detectedAction, "Volume adjusted.", mapOf("direction" to dir))
             }
+
+            val toolName = when (detectedAction.actionType) {
+                IntentActionType.TOGGLE_WIFI, IntentActionType.ENABLE_WIFI, IntentActionType.DISABLE_WIFI, IntentActionType.OPEN_WIFI_SETTINGS -> "WifiTool"
+                IntentActionType.TOGGLE_FLASHLIGHT, IntentActionType.ENABLE_FLASHLIGHT, IntentActionType.DISABLE_FLASHLIGHT -> "FlashlightTool"
+                IntentActionType.TOGGLE_BLUETOOTH, IntentActionType.ENABLE_BLUETOOTH, IntentActionType.DISABLE_BLUETOOTH, IntentActionType.OPEN_BLUETOOTH_SETTINGS -> "BluetoothTool"
+                IntentActionType.OPEN_CAMERA -> "CameraTool"
+                IntentActionType.OPEN_APP -> "OpenAppTool"
+                IntentActionType.OPEN_SETTINGS -> "SettingsTool"
+                IntentActionType.SET_ALARM -> "AlarmTool"
+                IntentActionType.SET_TIMER -> "TimerTool"
+                IntentActionType.CHECK_BATTERY -> "BatteryTool"
+                IntentActionType.CHECK_TIME -> "CurrentTimeTool"
+                IntentActionType.WEB_SEARCH -> "WebSearchTool"
+                IntentActionType.CALL_CONTACT -> "CallContactTool"
+                IntentActionType.SEND_SMS -> "SendSmsTool"
+                IntentActionType.WHATSAPP -> "WhatsAppTool"
+                IntentActionType.INSTAGRAM -> "InstagramTool"
+                IntentActionType.YOUTUBE -> "YouTubeTool"
+                IntentActionType.BROWSER -> "BrowserTool"
+                IntentActionType.NOTIFICATIONS -> "NotificationTool"
+                IntentActionType.CHECK_UPDATE, IntentActionType.DOWNLOAD_UPDATE, IntentActionType.INSTALL_UPDATE, IntentActionType.SHOW_WHATS_NEW -> "app_update"
+                else -> null
+            }
+
+            val tool = toolRegistry?.getTool(toolName ?: "") ?: when (toolName) {
+                "WifiTool" -> WifiTool()
+                "FlashlightTool" -> FlashlightTool()
+                "BluetoothTool" -> BluetoothTool()
+                "OpenAppTool" -> OpenAppTool()
+                "CameraTool" -> CameraTool()
+                "SettingsTool" -> SettingsTool()
+                "AlarmTool" -> AlarmTool()
+                "TimerTool" -> TimerTool()
+                "BatteryTool" -> BatteryTool()
+                "CurrentTimeTool" -> CurrentTimeTool()
+                "WebSearchTool" -> WebSearchTool()
+                "CallContactTool" -> CallContactTool()
+                "SendSmsTool" -> SendSmsTool()
+                "WhatsAppTool" -> WhatsAppTool()
+                "InstagramTool" -> InstagramTool()
+                "YouTubeTool" -> YouTubeTool()
+                "BrowserTool" -> BrowserTool()
+                "NotificationTool" -> NotificationTool()
+                else -> null
+            }
+
+            if (tool != null) {
+                val result = tool.execute(appContext, detectedAction.parameters)
+                return CommandExecutionResult(result.success, detectedAction, result.message, result.data ?: emptyMap(), result)
+            }
+
+            return CommandExecutionResult(true, detectedAction, detectedAction.spokenFeedback)
         }
 
-        /**
-         * Dispatches a command asynchronously through the Android CommandHandlerService.
-         */
         fun startServiceForResponse(context: Context, geminiResponse: String, userPrompt: String? = null) {
             val intent = Intent(context, CommandHandlerService::class.java).apply {
                 putExtra(EXTRA_GEMINI_RESPONSE, geminiResponse)

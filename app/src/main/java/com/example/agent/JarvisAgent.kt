@@ -4,24 +4,20 @@ import android.content.Context
 import com.example.ai.AIProvider
 import com.example.ai.AIRequest
 import com.example.ai.ToolInfo
-import com.example.database.AutomationHistoryEntity
-import com.example.database.JarvisDatabase
+import com.example.emotion.EmotionManager
 import com.example.history.ConversationRepository
-import com.example.permissions.PermissionManager
+import com.example.memory.MemoryManager
+import com.example.memory.MemoryVoiceAction
+import com.example.memory.QueryType
+import com.example.memory.model.MemoryCandidate
+import com.example.personality.PersonalityManager
+import com.example.personality.ResponseStyleManager
+import com.example.services.CommandHandlerService
+import com.example.tools.Tool
 import com.example.tools.ToolResult
+import com.example.voice.VoiceSettingsManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-
-sealed interface AgentExecutionState {
-    data object Idle : AgentExecutionState
-    data object Listening : AgentExecutionState
-    data class Thinking(val command: String) : AgentExecutionState
-    data class AwaitingConfirmation(val request: ConfirmationRequest) : AgentExecutionState
-    data class MissingPermission(val permissions: List<String>, val command: String) : AgentExecutionState
-    data class Executing(val toolName: String) : AgentExecutionState
-    data class Speaking(val response: String, val toolName: String? = null, val result: ToolResult? = null) : AgentExecutionState
-    data class Error(val message: String) : AgentExecutionState
-}
 
 class JarvisAgent(
     private val context: Context,
@@ -29,202 +25,256 @@ class JarvisAgent(
     val confirmationManager: ConfirmationManager,
     var aiProvider: AIProvider,
     private val conversationRepository: ConversationRepository,
-    var voiceSettingsManager: com.example.voice.VoiceSettingsManager? = null
+    var voiceSettingsManager: VoiceSettingsManager? = null,
+    var memoryManager: MemoryManager? = null,
+    var emotionManager: EmotionManager? = null,
+    var personalityManager: PersonalityManager? = null,
+    var responseStyleManager: ResponseStyleManager? = null
 ) {
+    var onMemorySuggestion: ((MemoryCandidate) -> Unit)? = null
 
     suspend fun executeCommand(
         rawCommand: String,
         languageInstruction: String? = null,
         onStateChange: (AgentExecutionState) -> Unit,
-        onFinished: (response: String, toolResult: ToolResult?) -> Unit
-    ) = withContext(Dispatchers.Main) {
-        val normalized = CommandNormalizer.normalize(rawCommand)
-        if (normalized.isBlank()) {
-            onStateChange(AgentExecutionState.Idle)
+        onFinished: (String, ToolResult?) -> Unit
+    ) = withContext(Dispatchers.Default) {
+        val trimmed = rawCommand.trim()
+        if (trimmed.isEmpty()) {
+            onFinished("I'm listening. Please give me a command.", null)
             return@withContext
         }
 
-        onStateChange(AgentExecutionState.Thinking(rawCommand))
+        onStateChange(AgentExecutionState.Thinking)
 
-        // Build list of tools for AI model
-        val toolInfos = toolRegistry.getAllTools().map {
-            ToolInfo(
-                name = it.name,
-                description = it.description,
-                parameters = it.parameters.map { p -> "${p.name} (${p.type})" }
+        // 1. Emotion detection
+        emotionManager?.updateFromUserInput(trimmed)
+
+        // 2. Direct Voice Memory actions (Remember, Forget, What do you know about me, Pause, Resume)
+        val memoryAction = memoryManager?.checkVoiceAction(trimmed)
+        if (memoryAction != null) {
+            val responseText = handleMemoryVoiceAction(memoryAction)
+            conversationRepository.saveConversation(
+                command = trimmed,
+                response = responseText,
+                tool = "MemorySystem",
+                result = responseText,
+                success = true
             )
+            onStateChange(AgentExecutionState.Speaking(responseText, "MemorySystem", ToolResult.ok(responseText)))
+            onFinished(responseText, ToolResult.ok(responseText))
+            return@withContext
         }
 
-        val activeLanguageInstruction = languageInstruction
-            ?: voiceSettingsManager?.getCurrentAiInstruction()
+        // 3. Direct intent detection via CommandHandlerService
+        val detected = CommandHandlerService.INSTANCE.parseIntent(trimmed, trimmed)
+        if (detected != null) {
+            val execResult = CommandHandlerService.INSTANCE.executeAction(context, detected, toolRegistry)
+            val result = execResult.toolResult ?: if (execResult.success) ToolResult.ok(execResult.message) else ToolResult.error(execResult.message)
+            conversationRepository.saveConversation(
+                command = trimmed,
+                response = execResult.message,
+                tool = detected.actionType.name,
+                result = result.message,
+                success = execResult.success
+            )
+            onStateChange(AgentExecutionState.Speaking(execResult.message, detected.actionType.name, result))
+            onFinished(execResult.message, result)
+            return@withContext
+        }
 
-        // Call AI Provider (Remote Gemini or Local Rule Fallback)
-        val aiResponse = withContext(Dispatchers.IO) {
-            aiProvider.processCommand(
-                AIRequest(
-                    prompt = rawCommand,
-                    tools = toolInfos,
-                    languageInstruction = activeLanguageInstruction
+        // 4. Retrieve relevant memory context and personality instructions
+        val memoryContext = memoryManager?.getRelevantContext(trimmed)
+        val personalityInstruction = personalityManager?.getPersonalityInstruction()
+        val emotionGuideline = emotionManager?.getCurrentPromptGuideline()
+
+        // 5. Query AI Provider
+        try {
+            val toolInfos = toolRegistry.getAllTools().map {
+                ToolInfo(
+                    name = it.name,
+                    description = it.description,
+                    parameters = it.parameters.map { p -> p.name }
                 )
+            }
+            val request = AIRequest(
+                prompt = trimmed,
+                tools = toolInfos,
+                languageInstruction = languageInstruction,
+                memoryContext = memoryContext,
+                personalityInstruction = personalityInstruction,
+                emotionalGuideline = emotionGuideline
             )
-        }
+            val aiResponse = aiProvider.processCommand(request)
 
-        val invocation = aiResponse.toolInvocation
-
-        // If no tool selected, map intent-based keywords from Gemini's response to actual system actions
-        if (invocation == null) {
-            val detectedAction = com.example.services.CommandHandlerService.parseIntent(aiResponse.textResponse, rawCommand)
-            if (detectedAction != null && detectedAction.actionType != com.example.services.IntentActionType.NONE) {
-                onStateChange(AgentExecutionState.Executing(detectedAction.actionType.name))
-                val result = withContext(Dispatchers.IO) {
-                    com.example.services.CommandHandlerService.executeAction(context, detectedAction, toolRegistry)
+            // Check if tool was invoked
+            val invocation = aiResponse.toolInvocation
+            if (invocation != null) {
+                val tool = toolRegistry.getTool(invocation.toolName)
+                if (tool != null) {
+                    runTool(tool, invocation.arguments, trimmed, onStateChange, onFinished)
+                    checkMemorySuggestion(trimmed)
+                    return@withContext
                 }
-                val cleanReply = com.example.services.CommandHandlerService.cleanResponseText(aiResponse.textResponse)
-                val speechOutput = if (cleanReply.isNotBlank()) cleanReply else result.message
+            }
 
+            // Also check if text contains an intent
+            val detectedFromAi = CommandHandlerService.INSTANCE.parseIntent(aiResponse.textResponse, trimmed)
+            if (detectedFromAi != null) {
+                val execResult = CommandHandlerService.INSTANCE.executeAction(context, detectedFromAi, toolRegistry)
+                val result = execResult.toolResult ?: if (execResult.success) ToolResult.ok(execResult.message) else ToolResult.error(execResult.message)
                 conversationRepository.saveConversation(
-                    command = rawCommand,
-                    response = speechOutput,
-                    tool = detectedAction.actionType.name,
-                    result = if (result.success) "SUCCESS" else "FAILED: ${result.message}",
-                    success = result.success
+                    command = trimmed,
+                    response = execResult.message,
+                    tool = detectedFromAi.actionType.name,
+                    result = result.message,
+                    success = execResult.success
                 )
-                try {
-                    JarvisDatabase.getInstance(context).automationHistoryDao().insert(
-                        AutomationHistoryEntity(
-                            command = rawCommand,
-                            tool = detectedAction.actionType.name,
-                            status = if (result.success) "SUCCESS" else "FAILED",
-                            result = result.message,
-                            timestamp = System.currentTimeMillis()
-                        )
-                    )
-                } catch (_: Exception) {}
-                onStateChange(AgentExecutionState.Speaking(speechOutput, detectedAction.actionType.name, result.toolResult))
-                onFinished(speechOutput, result.toolResult)
+                onStateChange(AgentExecutionState.Speaking(execResult.message, detectedFromAi.actionType.name, result))
+                onFinished(execResult.message, result)
+                checkMemorySuggestion(trimmed)
                 return@withContext
             }
 
-            val reply = com.example.services.CommandHandlerService.cleanResponseText(aiResponse.textResponse)
+            val cleanReply = CommandHandlerService.INSTANCE.cleanResponseText(aiResponse.textResponse)
             conversationRepository.saveConversation(
-                command = rawCommand,
-                response = reply,
+                command = trimmed,
+                response = cleanReply,
                 tool = null,
                 result = null,
                 success = true
             )
-            onStateChange(AgentExecutionState.Speaking(reply))
-            onFinished(reply, null)
-            return@withContext
-        }
+            onStateChange(AgentExecutionState.Speaking(cleanReply))
+            onFinished(cleanReply, null)
 
-        // Tool execution flow
-        val tool = toolRegistry.getTool(invocation.toolName)
-        if (tool == null) {
-            // Check if invocation toolName or command maps to an intent action via CommandHandlerService
-            val detected = com.example.services.CommandHandlerService.parseIntent(invocation.toolName, rawCommand)
-            if (detected != null && detected.actionType != com.example.services.IntentActionType.NONE) {
-                onStateChange(AgentExecutionState.Executing(detected.actionType.name))
-                val result = withContext(Dispatchers.IO) {
-                    com.example.services.CommandHandlerService.executeAction(context, detected, toolRegistry)
-                }
-                val speechOutput = result.message
-                conversationRepository.saveConversation(
-                    command = rawCommand,
-                    response = speechOutput,
-                    tool = detected.actionType.name,
-                    result = if (result.success) "SUCCESS" else "FAILED: ${result.message}",
-                    success = result.success
-                )
-                onStateChange(AgentExecutionState.Speaking(speechOutput, detected.actionType.name, result.toolResult))
-                onFinished(speechOutput, result.toolResult)
-                return@withContext
-            }
-
-            val errorMsg = "The requested tool \"${invocation.toolName}\" is not registered in the safety registry."
-            conversationRepository.saveConversation(
-                command = rawCommand,
-                response = errorMsg,
-                tool = invocation.toolName,
-                result = "TOOL_NOT_REGISTERED",
-                success = false
-            )
+            // 6. Check for implicit persistent facts to suggest to user
+            checkMemorySuggestion(trimmed)
+        } catch (e: Exception) {
+            val errorMsg = "JARVIS encountered an error: ${e.localizedMessage ?: "Unknown error"}"
             onStateChange(AgentExecutionState.Error(errorMsg))
-            onFinished(errorMsg, null)
-            return@withContext
+            onFinished(errorMsg, ToolResult.error(errorMsg))
         }
+    }
 
-        // Step 1: Check Permissions
-        val missingPermissions = PermissionManager.getMissingPermissions(context, tool.requiredPermissions)
-        if (missingPermissions.isNotEmpty()) {
-            val labels = missingPermissions.joinToString(", ") { PermissionManager.getPermissionLabel(it) }
-            val permMsg = "I need permission to access $labels to complete this action."
-            onStateChange(AgentExecutionState.MissingPermission(missingPermissions, rawCommand))
-            onFinished(permMsg, ToolResult.error(permMsg, errorCode = "PERMISSION_REQUIRED"))
-            return@withContext
-        }
-
-        // Step 2: Check Confirmation requirements
-        if (confirmationManager.requiresConfirmation(tool, invocation.arguments)) {
-            val (title, msg) = confirmationManager.buildConfirmationDetails(tool, invocation.arguments)
-            val request = ConfirmationRequest(
-                toolName = tool.name,
-                riskLevel = tool.riskLevel,
-                title = title,
-                message = msg,
-                parameters = invocation.arguments,
-                onConfirm = {
-                    runTool(tool, invocation.arguments, rawCommand, onStateChange, onFinished)
-                },
-                onCancel = {
-                    val cancelMsg = "Action cancelled."
-                    onStateChange(AgentExecutionState.Speaking(cancelMsg, tool.name))
-                    onFinished(cancelMsg, ToolResult.error("Cancelled by user", errorCode = "USER_CANCELLED"))
+    private suspend fun handleMemoryVoiceAction(action: MemoryVoiceAction): String {
+        val mm = memoryManager ?: return "Memory system is unavailable."
+        return when (action) {
+            is MemoryVoiceAction.StoreExplicit -> {
+                mm.storeCandidate(action.candidate)
+                "I have remembered that for you, sir."
+            }
+            is MemoryVoiceAction.Query -> {
+                when (action.queryType) {
+                    QueryType.NAME -> {
+                        val nameMem = mm.repository.getMemoryByKey("user_name")
+                        if (nameMem != null) {
+                            "Your name is ${nameMem.effectiveText.replace(Regex("""(?i)^user's name is\s*"""), "")}, sir."
+                        } else {
+                            "I don't have your name recorded yet, sir. What would you like me to call you?"
+                        }
+                    }
+                    QueryType.ALL_PERSONAL -> {
+                        val list = mm.repository.getAllMemoriesOnce()
+                        if (list.isEmpty()) {
+                            "I don't have any memories saved about you yet, sir."
+                        } else {
+                            val items = list.take(5).joinToString(", ") { it.effectiveText }
+                            "Here is what I remember about you, sir: $items."
+                        }
+                    }
+                    QueryType.PREFERENCES -> {
+                        val list = mm.repository.getAllMemoriesOnce().filter { it.category == "preferences" }
+                        if (list.isEmpty()) {
+                            "You haven't specified any custom preferences yet, sir."
+                        } else {
+                            val items = list.take(4).joinToString(", ") { it.effectiveText }
+                            "Your stored preferences are: $items."
+                        }
+                    }
+                    QueryType.ROUTINES -> {
+                        val list = mm.repository.getAllMemoriesOnce().filter { it.category == "routines" }
+                        if (list.isEmpty()) {
+                            "I don't have any routines stored yet, sir."
+                        } else {
+                            val items = list.take(4).joinToString(", ") { it.effectiveText }
+                            "Your stored routines are: $items."
+                        }
+                    }
+                    else -> {
+                        val memories = mm.retriever.getRelevantMemories(action.subject.ifBlank { "preferences" })
+                        if (memories.isEmpty()) {
+                            "I couldn't find anything in my memory regarding that, sir."
+                        } else {
+                            "I remember that: ${memories.first().effectiveText}."
+                        }
+                    }
                 }
-            )
-            onStateChange(AgentExecutionState.AwaitingConfirmation(request))
-            return@withContext
+            }
+            is MemoryVoiceAction.Forget -> {
+                if (action.target != null) {
+                    val deleted = mm.repository.deleteMemoryByKey(action.target)
+                    if (deleted) "I have deleted the memory about ${action.target}, sir."
+                    else "I couldn't find a matching memory to delete, sir."
+                } else {
+                    val all = mm.repository.getAllMemoriesOnce()
+                    if (all.isNotEmpty()) {
+                        mm.repository.deleteMemory(all.first())
+                        "I have forgotten that for you, sir."
+                    } else {
+                        "There was nothing to forget in my memory, sir."
+                    }
+                }
+            }
+            is MemoryVoiceAction.Pause -> {
+                mm.setMemoryPaused(true)
+                "Memory recording has been paused. I won't save any new memories until you resume."
+            }
+            is MemoryVoiceAction.Resume -> {
+                mm.setMemoryPaused(false)
+                "Memory recording resumed. I'm ready to learn your preferences again, sir."
+            }
+            is MemoryVoiceAction.ClearAll -> {
+                val count = mm.clearAll()
+                "All JARVIS long-term memories ($count items) have been cleared, sir."
+            }
+            is MemoryVoiceAction.ClearConversations -> {
+                val count = mm.clearConversations()
+                "Cleared $count conversation memories, sir."
+            }
         }
+    }
 
-        // Step 3: Run Tool directly
-        runTool(tool, invocation.arguments, rawCommand, onStateChange, onFinished)
+    private fun checkMemorySuggestion(trimmed: String) {
+        val mm = memoryManager ?: return
+        if (!mm.isMemoryActive()) return
+        val suggestion = mm.detectImplicitSuggestion(trimmed)
+        if (suggestion != null) {
+            onMemorySuggestion?.invoke(suggestion)
+        }
     }
 
     private suspend fun runTool(
-        tool: com.example.tools.Tool,
+        tool: Tool,
         params: Map<String, Any?>,
         rawCommand: String,
         onStateChange: (AgentExecutionState) -> Unit,
-        onFinished: (response: String, toolResult: ToolResult?) -> Unit
+        onFinished: (String, ToolResult?) -> Unit
     ) {
         onStateChange(AgentExecutionState.Executing(tool.name))
-
-        val result = withContext(Dispatchers.IO) {
+        val result = try {
             tool.execute(context, params)
+        } catch (e: Exception) {
+            ToolResult.error("Failed to execute ${tool.name}: ${e.localizedMessage}")
         }
 
         val speechText = result.message
-
         conversationRepository.saveConversation(
             command = rawCommand,
             response = speechText,
             tool = tool.name,
-            result = if (result.success) "SUCCESS" else "FAILED: ${result.errorCode ?: ""}",
+            result = result.message,
             success = result.success
         )
-
-        try {
-            JarvisDatabase.getInstance(context).automationHistoryDao().insert(
-                AutomationHistoryEntity(
-                    command = rawCommand,
-                    tool = tool.name,
-                    status = result.status.name,
-                    result = result.message,
-                    timestamp = System.currentTimeMillis()
-                )
-            )
-        } catch (_: Exception) {}
-
         onStateChange(AgentExecutionState.Speaking(speechText, tool.name, result))
         onFinished(speechText, result)
     }

@@ -15,5 +15,5 @@ interface UpdateHistoryDao {
     suspend fun insert(entity: UpdateHistoryEntity): Long
 
     @Query("DELETE FROM update_history")
-    suspend fun clearAll()
+    suspend fun clearAll(): Int
 }

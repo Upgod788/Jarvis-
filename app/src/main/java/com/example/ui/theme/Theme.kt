@@ -8,73 +8,67 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
-private val DarkColorScheme =
-  darkColorScheme(
-    primary = DarkJarvisColors.cyanPrimary,
-    onPrimary = Color.Black,
-    primaryContainer = DarkJarvisColors.cyanDark,
-    onPrimaryContainer = DarkJarvisColors.cyanBright,
-    secondary = DarkJarvisColors.blueAccent,
-    onSecondary = Color.White,
-    background = DarkJarvisColors.background,
-    onBackground = DarkJarvisColors.textPrimary,
-    surface = DarkJarvisColors.surface,
-    onSurface = DarkJarvisColors.textPrimary,
-    surfaceVariant = DarkJarvisColors.cardSurface,
-    onSurfaceVariant = DarkJarvisColors.textSecondary,
-    outline = DarkJarvisColors.cardBorder,
-    error = JarvisError
-  )
+private val DarkColorScheme = darkColorScheme(
+    primary = DefaultJarvisCyanPrimary,
+    secondary = DefaultJarvisCyanBright,
+    tertiary = DefaultJarvisBlueAccent,
+    background = DeepNavy,
+    surface = SurfaceNavy,
+    onPrimary = DeepNavy,
+    onSecondary = DeepNavy,
+    onTertiary = DeepNavy,
+    onBackground = Color(0xFFEFF4F8),
+    onSurface = Color(0xFFEFF4F8)
+)
 
-private val LightColorScheme =
-  lightColorScheme(
-    primary = LightJarvisColors.cyanPrimary,
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFFE0F7FA),
-    onPrimaryContainer = Color(0xFF004D40),
-    secondary = LightJarvisColors.blueAccent,
-    onSecondary = Color.White,
-    background = LightJarvisColors.background,
-    onBackground = LightJarvisColors.textPrimary,
-    surface = LightJarvisColors.surface,
-    onSurface = LightJarvisColors.textPrimary,
-    surfaceVariant = LightJarvisColors.cardSurface,
-    onSurfaceVariant = LightJarvisColors.textSecondary,
-    outline = LightJarvisColors.cardBorder,
-    error = Color(0xFFD32F2F)
-  )
+private val LightColorScheme = lightColorScheme(
+    primary = Color(0xFF0091EA),
+    secondary = Color(0xFF00B0FF),
+    tertiary = Color(0xFF0288D1),
+    background = Color(0xFFF4F7FB),
+    surface = Color(0xFFFFFFFF),
+    onPrimary = Color(0xFFFFFFFF),
+    onSecondary = Color(0xFFFFFFFF),
+    onTertiary = Color(0xFFFFFFFF),
+    onBackground = Color(0xFF0D1B2A),
+    onSurface = Color(0xFF0D1B2A)
+)
 
 @Composable
 fun MyApplicationTheme(
-  themeMode: ThemeMode? = null,
-  darkTheme: Boolean = isSystemInDarkTheme(),
-  // Dynamic color is available on Android 12+
-  dynamicColor: Boolean = false,
-  content: @Composable () -> Unit,
+    themeMode: ThemeMode? = null,
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    dynamicColor: Boolean = false,
+    content: @Composable () -> Unit
 ) {
-  val isDark = when (themeMode) {
-    ThemeMode.LIGHT -> false
-    ThemeMode.DARK -> true
-    ThemeMode.SYSTEM -> isSystemInDarkTheme()
-    null -> darkTheme
-  }
-
-  val jarvisColors = if (isDark) DarkJarvisColors else LightJarvisColors
-
-  val colorScheme =
-    when {
-      dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-        val context = LocalContext.current
-        if (isDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-      }
-      isDark -> DarkColorScheme
-      else -> LightColorScheme
+    val isDark = when (themeMode) {
+        ThemeMode.DARK -> true
+        ThemeMode.LIGHT -> false
+        ThemeMode.SYSTEM, null -> darkTheme
     }
 
-  androidx.compose.runtime.CompositionLocalProvider(LocalJarvisColors provides jarvisColors) {
-    MaterialTheme(colorScheme = colorScheme, typography = Typography, content = content)
-  }
+    val jarvisColors = if (isDark) DarkJarvisColors else LightJarvisColors
+
+    val context = LocalContext.current
+    val colorScheme = when {
+        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+            if (isDark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
+        }
+        isDark -> DarkColorScheme
+        else -> LightColorScheme
+    }
+
+    CompositionLocalProvider(
+        LocalJarvisColors provides jarvisColors
+    ) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = Typography,
+            content = content
+        )
+    }
 }

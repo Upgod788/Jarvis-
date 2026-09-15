@@ -15,5 +15,5 @@ interface AutomationHistoryDao {
     suspend fun insert(entry: AutomationHistoryEntity): Long
 
     @Query("DELETE FROM automation_history")
-    suspend fun clearAll()
+    suspend fun clearAll(): Int
 }

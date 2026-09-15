@@ -5,9 +5,11 @@ import kotlinx.coroutines.flow.Flow
 class ConversationRepository(private val conversationDao: ConversationDao) {
     val allConversations: Flow<List<ConversationEntity>> = conversationDao.getAllConversations()
 
-    fun getRecent(limit: Int = 10): Flow<List<ConversationEntity>> = conversationDao.getRecentConversations(limit)
+    fun getRecent(limit: Int = 10): Flow<List<ConversationEntity>> =
+        conversationDao.getRecentConversations(limit)
 
-    fun search(query: String): Flow<List<ConversationEntity>> = conversationDao.searchConversations(query)
+    fun search(query: String): Flow<List<ConversationEntity>> =
+        conversationDao.searchConversations(query)
 
     suspend fun saveConversation(
         command: String,
@@ -26,7 +28,9 @@ class ConversationRepository(private val conversationDao: ConversationDao) {
         return conversationDao.insertConversation(entity)
     }
 
-    suspend fun deleteById(id: Long) = conversationDao.deleteConversationById(id)
+    suspend fun deleteById(id: Long): Int =
+        conversationDao.deleteConversationById(id)
 
-    suspend fun clearAll() = conversationDao.clearAllConversations()
+    suspend fun clearAll(): Int =
+        conversationDao.clearAllConversations()
 }

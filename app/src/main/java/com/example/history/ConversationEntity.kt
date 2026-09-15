@@ -6,7 +6,7 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "conversations")
 data class ConversationEntity(
     @PrimaryKey(autoGenerate = true)
-    val id: Long = 0,
+    val id: Long = 0L,
     val userCommand: String,
     val assistantResponse: String,
     val toolUsed: String? = null,
@@ -14,3 +14,5 @@ data class ConversationEntity(
     val isSuccess: Boolean = true,
     val timestamp: Long = System.currentTimeMillis()
 )
+
+typealias ConversationHistoryEntity = ConversationEntity

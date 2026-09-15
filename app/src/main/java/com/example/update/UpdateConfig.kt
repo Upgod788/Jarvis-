@@ -6,14 +6,8 @@ object UpdateConfig {
     const val NOTIFICATION_CHANNEL_ID = "jarvis_updates"
     const val NOTIFICATION_CHANNEL_NAME = "JARVIS App Updates"
     const val NOTIFICATION_ID = 2001
-
-    // Background sync work name
     const val BACKGROUND_WORK_NAME = "jarvis_periodic_update_check"
-
-    // Safe maximum download size (150 MB)
-    const val MAX_APK_SIZE_BYTES = 150L * 1024L * 1024L
-
-    // HTTP Timeouts
+    const val MAX_APK_SIZE_BYTES = 157286400L // 150 MB
     const val CONNECT_TIMEOUT_SECONDS = 15L
     const val READ_TIMEOUT_SECONDS = 30L
 

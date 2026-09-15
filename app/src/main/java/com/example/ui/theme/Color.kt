@@ -1,26 +1,26 @@
 package com.example.ui.theme
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
-// Default Fallback Color Constants
 val DefaultJarvisCyanPrimary = Color(0xFF00E5FF)
 val DefaultJarvisCyanBright = Color(0xFF18FFFF)
-val DefaultJarvisCyanDark = Color(0xFF00838F)
-val DefaultJarvisBlueAccent = Color(0xFF0091EA)
+val DefaultJarvisCyanDark = Color(0xFF0091EA)
+val DefaultJarvisBlueAccent = Color(0xFF0099EA)
 
 val JarvisSuccess = Color(0xFF00E676)
 val JarvisWarning = Color(0xFFFFAB00)
 val JarvisError = Color(0xFFFF5252)
 
 val CyanAccent = Color(0xFF00E5FF)
-val ArcBlue = Color(0xFF0091EA)
-val TextSecondary = Color(0xFF8FA3BF)
-val SurfaceNavy = Color(0xFF0A101E)
-val CardDark = Color(0xFF111A2D)
-val BorderNavy = Color(0xFF1B2B48)
-val DeepNavy = Color(0xFF050811)
+val ArcBlue = Color(0xFF0099EA)
+val TextSecondary = Color(0xFF8CA8BF)
+val SurfaceNavy = Color(0xFF09101E)
+val CardDark = Color(0xFF101E2D)
+val BorderNavy = Color(0xFF1A3348)
+val DeepNavy = Color(0xFF040811)
 val HologramGreen = Color(0xFF00E676)
 val WarningYellow = Color(0xFFFFAB00)
 val CrimsonRed = Color(0xFFFF5252)
@@ -28,105 +28,94 @@ val CrimsonRed = Color(0xFFFF5252)
 val Purple80 = Color(0xFFD0BCFF)
 val PurpleGrey80 = Color(0xFFCCC2DC)
 val Pink80 = Color(0xFFEFB8C8)
+
 val Purple40 = Color(0xFF6650a4)
 val PurpleGrey40 = Color(0xFF625b71)
 val Pink40 = Color(0xFF7D5260)
 
-/**
- * Data class representing the full palette of JARVIS UI colors for either Light or Dark modes.
- */
-data class JarvisColors(
-    val background: Color,
-    val surface: Color,
-    val cardSurface: Color,
-    val cardBorder: Color,
-    val textPrimary: Color,
-    val textSecondary: Color,
-    val textMuted: Color,
-    val cyanPrimary: Color,
-    val cyanBright: Color,
-    val cyanDark: Color,
-    val blueAccent: Color,
-    val isDark: Boolean
-)
-
-// Dark Theme (Classic JARVIS Cyberpunk HUD)
 val DarkJarvisColors = JarvisColors(
-    background = Color(0xFF050811),
-    surface = Color(0xFF0A101E),
-    cardSurface = Color(0xFF111A2D),
-    cardBorder = Color(0xFF1B2B48),
-    textPrimary = Color(0xFFF0F4F8),
-    textSecondary = Color(0xFF8FA3BF),
-    textMuted = Color(0xFF556987),
+    background = Color(0xFF040811),
+    surface = Color(0xFF09101E),
+    cardSurface = Color(0xFF101E2D),
+    cardBorder = Color(0xFF1A3348),
+    textPrimary = Color(0xFFEFF4F8),
+    textSecondary = Color(0xFF8CA8BF),
+    textMuted = Color(0xFF526D87),
     cyanPrimary = Color(0xFF00E5FF),
     cyanBright = Color(0xFF18FFFF),
-    cyanDark = Color(0xFF00838F),
-    blueAccent = Color(0xFF0091EA),
+    cyanDark = Color(0xFF0091EA),
+    blueAccent = Color(0xFF0099EA),
     isDark = true
 )
 
-// Light Theme (Clean Scientific Laboratory Interface)
 val LightJarvisColors = JarvisColors(
-    background = Color(0xFFF1F5F9), // Ice Pearl Slate-100
-    surface = Color(0xFFFFFFFF),    // Pure Crisp White
-    cardSurface = Color(0xFFF8FAFC), // Soft Slate-50 Card
-    cardBorder = Color(0xFFCBD5E1),  // Slate-300 Border
-    textPrimary = Color(0xFF0F172A), // Slate-900 High-Contrast Text
-    textSecondary = Color(0xFF334155), // Slate-700 Secondary
-    textMuted = Color(0xFF64748B),     // Slate-500 Muted
-    cyanPrimary = Color(0xFF00838F), // Deep Cyan/Teal (passes 4.5:1 WCAG against white)
-    cyanBright = Color(0xFF0097A7),
-    cyanDark = Color(0xFF006064),
-    blueAccent = Color(0xFF0284C7),  // Sky 600
+    background = Color(0xFFF4F7FB),
+    surface = Color(0xFFFFFFFF),
+    cardSurface = Color(0xFFE8EEF5),
+    cardBorder = Color(0xFFD0DDEB),
+    textPrimary = Color(0xFF0D1B2A),
+    textSecondary = Color(0xFF415A77),
+    textMuted = Color(0xFF778DA9),
+    cyanPrimary = Color(0xFF0091EA),
+    cyanBright = Color(0xFF00B0FF),
+    cyanDark = Color(0xFF01579B),
+    blueAccent = Color(0xFF0288D1),
     isDark = false
 )
 
 val LocalJarvisColors = staticCompositionLocalOf { DarkJarvisColors }
 
-// Dynamic contextual color getters that adapt automatically based on the active theme
 val JarvisDarkBackground: Color
     @Composable
+    @ReadOnlyComposable
     get() = LocalJarvisColors.current.background
 
 val JarvisDarkSurface: Color
     @Composable
+    @ReadOnlyComposable
     get() = LocalJarvisColors.current.surface
 
 val JarvisCardSurface: Color
     @Composable
+    @ReadOnlyComposable
     get() = LocalJarvisColors.current.cardSurface
 
 val JarvisCardBorder: Color
     @Composable
+    @ReadOnlyComposable
     get() = LocalJarvisColors.current.cardBorder
 
 val JarvisTextPrimary: Color
     @Composable
+    @ReadOnlyComposable
     get() = LocalJarvisColors.current.textPrimary
 
 val JarvisTextSecondary: Color
     @Composable
+    @ReadOnlyComposable
     get() = LocalJarvisColors.current.textSecondary
 
 val JarvisTextMuted: Color
     @Composable
+    @ReadOnlyComposable
     get() = LocalJarvisColors.current.textMuted
 
 val JarvisCyanPrimary: Color
     @Composable
+    @ReadOnlyComposable
     get() = LocalJarvisColors.current.cyanPrimary
 
 val JarvisCyanBright: Color
     @Composable
+    @ReadOnlyComposable
     get() = LocalJarvisColors.current.cyanBright
 
 val JarvisCyanDark: Color
     @Composable
+    @ReadOnlyComposable
     get() = LocalJarvisColors.current.cyanDark
 
 val JarvisBlueAccent: Color
     @Composable
+    @ReadOnlyComposable
     get() = LocalJarvisColors.current.blueAccent
-
-

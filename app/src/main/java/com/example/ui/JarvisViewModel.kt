@@ -5,64 +5,473 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.JarvisApplication
 import com.example.agent.AgentExecutionState
+import com.example.agent.ConfirmationRequest
+import com.example.agent.ConfirmationSettings
 import com.example.ai.AIProviderType
 import com.example.ai.AISettings
+import com.example.database.UpdateHistoryEntity
+import com.example.devices.ConnectionType
+import com.example.devices.Device
+import com.example.devices.DeviceManager
+import com.example.devices.DeviceType
 import com.example.history.ConversationEntity
+import com.example.history.ConversationRepository
 import com.example.memory.MemoryEntity
+import com.example.memory.MemoryRepository
+import com.example.routines.Routine
+import com.example.routines.RoutineManager
+import com.example.ui.theme.ThemeMode
+import com.example.update.InstallResult
+import com.example.update.RemoteConfig
+import com.example.update.UpdateManager
+import com.example.update.UpdateManifest
+import com.example.update.UpdateSettings
+import com.example.update.UpdateStatus
 import com.example.voice.SpeechEvent
 import com.example.voice.SpeechRecognizerManager
+import com.example.voice.TextToSpeechManager
+import com.example.voice.VoiceOption
+import com.example.voice.VoiceSettings
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class JarvisViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val app = application as JarvisApplication
-    private val agent = app.agent
-    private val speechRecognizer = app.speechRecognizerManager
-    private val tts = app.textToSpeechManager
-    private val conversationRepo = app.conversationRepository
-    private val memoryRepo = app.memoryRepository
+    val app = application as JarvisApplication
+
+    val agent = app.agent
+    val speechRecognizer: SpeechRecognizerManager = app.speechRecognizerManager
+    val tts: TextToSpeechManager = app.textToSpeechManager
+    val conversationRepo: ConversationRepository = app.conversationRepository
+    val memoryRepo: MemoryRepository = app.memoryRepository
+    val memoryManager: com.example.memory.MemoryManager = app.memoryManager
+    val personalityManager: com.example.personality.PersonalityManager = app.personalityManager
+    val emotionManager: com.example.emotion.EmotionManager = app.emotionManager
+
+    val deviceManager: DeviceManager = app.deviceManager
+    val routineManager: RoutineManager = app.routineManager
+    val updateManager: UpdateManager = app.updateManager
 
     private val _uiState = MutableStateFlow(JarvisUiState())
     val uiState: StateFlow<JarvisUiState> = _uiState.asStateFlow()
 
-    val conversations: StateFlow<List<ConversationEntity>> = conversationRepo.allConversations
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    private val _pendingMemorySuggestion = MutableStateFlow<com.example.memory.model.MemoryCandidate?>(null)
+    val pendingMemorySuggestion: StateFlow<com.example.memory.model.MemoryCandidate?> = _pendingMemorySuggestion.asStateFlow()
 
-    val memories: StateFlow<List<MemoryEntity>> = memoryRepo.allMemories
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val conversations: StateFlow<List<ConversationEntity>> =
+        conversationRepo.allConversations.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-    val aiSettings: StateFlow<AISettings> = app.aiProvider.settingsManager.settings
+    val memories: StateFlow<List<MemoryEntity>> =
+        memoryRepo.allMemories.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-    val themeMode: StateFlow<com.example.ui.theme.ThemeMode> = app.themeManager.themeMode
+    val personalityStyle: StateFlow<com.example.personality.CommunicationStyle> =
+        personalityManager.style
 
-    val confirmationSettings: StateFlow<com.example.agent.ConfirmationSettings> = app.confirmationManager.settings
+    val isMemoryEnabled: StateFlow<Boolean> =
+        memoryManager.isMemoryEnabled
 
-    val voiceSettings: StateFlow<com.example.voice.VoiceSettings> = app.voiceSettingsManager.settings
-    val availableVoices: StateFlow<List<com.example.voice.VoiceOption>> = app.voiceSettingsManager.availableVoices
+    val isMemoryPaused: StateFlow<Boolean> =
+        memoryManager.isMemoryPaused
 
-    val deviceManager = app.deviceManager
-    val devices: StateFlow<List<com.example.devices.Device>> = deviceManager.devices
+    val memoryEvents: StateFlow<List<com.example.memory.MemoryEventEntity>> =
+        memoryManager.recentEvents.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-    val routineManager = app.routineManager
-    val routines: StateFlow<List<com.example.routines.Routine>> = routineManager.routines
+    val conversationSummaries: StateFlow<List<com.example.memory.ConversationSummaryEntity>> =
+        memoryManager.conversationSummaries.stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
 
-    val updateManager = app.updateManager
-    val updateStatus: StateFlow<com.example.update.UpdateStatus> = updateManager.status
-    val updateSettings: StateFlow<com.example.update.UpdateSettings> = updateManager.preferences.settings
-    val remoteConfig: StateFlow<com.example.update.RemoteConfig> = updateManager.remoteConfigManager.config
-    val updateHistory: StateFlow<List<com.example.database.UpdateHistoryEntity>> = app.database.updateHistoryDao().getAll()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val aiSettings: StateFlow<AISettings> =
+        app.aiProvider.settingsManager.settings
 
-    fun checkForUpdates(isUserInitiated: Boolean = true) {
-        updateManager.checkForUpdates(isUserInitiated = isUserInitiated)
+    val themeMode: StateFlow<ThemeMode> =
+        app.themeManager.themeMode
+
+    val confirmationSettings: StateFlow<ConfirmationSettings> =
+        app.confirmationManager.settings
+
+    val voiceSettings: StateFlow<VoiceSettings> =
+        app.voiceSettingsManager.settings
+
+    val availableVoices: StateFlow<List<VoiceOption>> =
+        app.voiceSettingsManager.availableVoices
+
+    val devices: StateFlow<List<Device>> =
+        deviceManager.devices
+
+    val routines: StateFlow<List<Routine>> =
+        routineManager.routines
+
+    val updateStatus: StateFlow<UpdateStatus> =
+        updateManager.status
+
+    val updateSettings: StateFlow<UpdateSettings> =
+        updateManager.preferences.settings
+
+    val remoteConfig: StateFlow<RemoteConfig> =
+        updateManager.remoteConfigManager.config
+
+    val updateHistory: StateFlow<List<UpdateHistoryEntity>> =
+        app.database.updateHistoryDao().getAll()
+            .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+
+    init {
+        agent.onMemorySuggestion = { candidate ->
+            _pendingMemorySuggestion.value = candidate
+        }
+        viewModelScope.launch {
+            tts.isSpeaking.collect { speaking ->
+                _uiState.value = _uiState.value.copy(
+                    isTtsSpeaking = speaking,
+                    assistantState = if (speaking) AssistantState.SPEAKING else if (_uiState.value.assistantState == AssistantState.SPEAKING) AssistantState.IDLE else _uiState.value.assistantState
+                )
+            }
+        }
+        viewModelScope.launch {
+            speechRecognizer.rmsLevel.collect { rms ->
+                _uiState.value = _uiState.value.copy(audioRmsLevel = rms)
+            }
+        }
     }
 
-    fun startDownloadUpdate(manifest: com.example.update.UpdateManifest? = null) {
+    fun startListening() {
+        _uiState.value = _uiState.value.copy(
+            assistantState = AssistantState.LISTENING,
+            currentCommand = ""
+        )
+        speechRecognizer.startListening { event ->
+            when (event) {
+                is SpeechEvent.PartialResult -> {
+                    _uiState.value = _uiState.value.copy(currentCommand = event.text)
+                }
+                is SpeechEvent.FinalResult -> {
+                    _uiState.value = _uiState.value.copy(
+                        currentCommand = event.text,
+                        assistantState = AssistantState.THINKING
+                    )
+                    processCommand(event.text)
+                }
+                is SpeechEvent.Error -> {
+                    _uiState.value = _uiState.value.copy(
+                        assistantState = AssistantState.IDLE
+                    )
+                }
+                is SpeechEvent.RmsChanged -> {
+                    _uiState.value = _uiState.value.copy(audioRmsLevel = event.rmsdB)
+                }
+                else -> Unit
+            }
+        }
+    }
+
+    fun stopListening() {
+        speechRecognizer.stopListening()
+        if (_uiState.value.assistantState == AssistantState.LISTENING) {
+            _uiState.value = _uiState.value.copy(assistantState = AssistantState.IDLE)
+        }
+    }
+
+    fun submitVoiceCommand(spokenText: String) {
+        processCommand(spokenText)
+    }
+
+    fun processCommand(command: String) {
+        val trimmed = command.trim()
+        if (trimmed.isEmpty()) return
+
+        _uiState.value = _uiState.value.copy(
+            currentCommand = trimmed,
+            assistantState = AssistantState.THINKING
+        )
+
+        viewModelScope.launch {
+            agent.executeCommand(
+                rawCommand = trimmed,
+                languageInstruction = app.voiceSettingsManager.getCurrentAiInstruction(),
+                onStateChange = { state ->
+                    when (state) {
+                        is AgentExecutionState.Thinking -> {
+                            _uiState.value = _uiState.value.copy(assistantState = AssistantState.THINKING)
+                        }
+                        is AgentExecutionState.Listening -> {
+                            _uiState.value = _uiState.value.copy(assistantState = AssistantState.LISTENING)
+                        }
+                        is AgentExecutionState.Executing -> {
+                            _uiState.value = _uiState.value.copy(
+                                assistantState = AssistantState.EXECUTING,
+                                activeToolName = state.toolName
+                            )
+                        }
+                        is AgentExecutionState.AwaitingConfirmation -> {
+                            _uiState.value = _uiState.value.copy(
+                                pendingConfirmation = state.request
+                            )
+                        }
+                        is AgentExecutionState.Speaking -> {
+                            _uiState.value = _uiState.value.copy(
+                                assistantState = AssistantState.SPEAKING,
+                                assistantResponse = state.response,
+                                activeToolName = state.toolName,
+                                activeToolResult = state.result
+                            )
+                        }
+                        is AgentExecutionState.Error -> {
+                            _uiState.value = _uiState.value.copy(
+                                assistantState = AssistantState.ERROR,
+                                assistantResponse = state.message
+                            )
+                        }
+                        is AgentExecutionState.Idle -> {
+                            _uiState.value = _uiState.value.copy(assistantState = AssistantState.IDLE)
+                        }
+                    }
+                },
+                onFinished = { responseText, toolResult ->
+                    _uiState.value = _uiState.value.copy(
+                        assistantResponse = responseText,
+                        activeToolResult = toolResult,
+                        assistantState = if (_uiState.value.isVoiceMuted) AssistantState.IDLE else AssistantState.SPEAKING
+                    )
+                    if (!_uiState.value.isVoiceMuted && responseText.isNotBlank()) {
+                        tts.speak(responseText) {
+                            _uiState.value = _uiState.value.copy(assistantState = AssistantState.IDLE)
+                        }
+                    } else {
+                        _uiState.value = _uiState.value.copy(assistantState = AssistantState.IDLE)
+                    }
+                }
+            )
+        }
+    }
+
+    fun confirmPendingAction() {
+        val pending = _uiState.value.pendingConfirmation ?: return
+        _uiState.value = _uiState.value.copy(pendingConfirmation = null)
+        viewModelScope.launch {
+            pending.onConfirm()
+        }
+    }
+
+    fun cancelPendingAction() {
+        val pending = _uiState.value.pendingConfirmation ?: return
+        _uiState.value = _uiState.value.copy(pendingConfirmation = null)
+        pending.onCancel()
+    }
+
+    fun toggleVoiceMute() {
+        val newMuted = !_uiState.value.isVoiceMuted
+        _uiState.value = _uiState.value.copy(isVoiceMuted = newMuted)
+        tts.isVoiceEnabled = !newMuted
+        if (newMuted) {
+            tts.stop()
+        }
+    }
+
+    fun speakCurrentResponse() {
+        val resp = _uiState.value.assistantResponse
+        if (resp.isNotBlank()) {
+            tts.speak(resp)
+        }
+    }
+
+    fun clearHistory() {
+        viewModelScope.launch {
+            conversationRepo.clearAll()
+        }
+    }
+
+    fun deleteHistoryItem(id: Long) {
+        viewModelScope.launch {
+            conversationRepo.deleteById(id)
+        }
+    }
+
+    fun setPersonalityStyle(style: com.example.personality.CommunicationStyle) {
+        personalityManager.setStyle(style)
+    }
+
+    fun setMemoryEnabled(enabled: Boolean) {
+        memoryManager.setMemoryEnabled(enabled)
+    }
+
+    fun setMemoryPaused(paused: Boolean) {
+        memoryManager.setMemoryPaused(paused)
+    }
+
+    fun approveMemorySuggestion() {
+        viewModelScope.launch {
+            val candidate = _pendingMemorySuggestion.value
+            if (candidate != null) {
+                memoryManager.storeCandidate(candidate)
+                _pendingMemorySuggestion.value = null
+            }
+        }
+    }
+
+    fun rejectMemorySuggestion() {
+        _pendingMemorySuggestion.value = null
+    }
+
+    fun saveMemory(
+        key: String,
+        value: String,
+        category: String = "general",
+        importance: Float = 0.5f
+    ) {
+        viewModelScope.launch {
+            memoryRepo.saveMemory(
+                key = key,
+                value = value,
+                category = category,
+                importance = importance
+            )
+        }
+    }
+
+    fun updateMemory(memory: MemoryEntity) {
+        viewModelScope.launch {
+            memoryRepo.updateMemory(memory)
+        }
+    }
+
+    fun deleteMemory(memory: MemoryEntity) {
+        viewModelScope.launch {
+            memoryRepo.deleteMemory(memory)
+        }
+    }
+
+    fun deleteMemoryById(memoryId: String) {
+        viewModelScope.launch {
+            memoryRepo.deleteMemoryById(memoryId)
+        }
+    }
+
+    fun clearAllMemories() {
+        viewModelScope.launch {
+            memoryManager.clearAll()
+        }
+    }
+
+    fun clearConversationMemories() {
+        viewModelScope.launch {
+            memoryManager.clearConversations()
+        }
+    }
+
+    fun exportMemoriesJson(onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            val json = memoryManager.exportJson()
+            onResult(json)
+        }
+    }
+
+    fun importMemoriesJson(json: String, onResult: (Int) -> Unit) {
+        viewModelScope.launch {
+            val count = memoryManager.importJson(json)
+            onResult(count)
+        }
+    }
+
+    fun setVoiceLanguage(langCode: String) {
+        app.voiceSettingsManager.setLanguage(langCode)
+    }
+
+    fun setVoice(voiceId: String) {
+        app.voiceSettingsManager.setVoice(voiceId)
+    }
+
+    fun setSpeechRate(rate: Float) {
+        app.voiceSettingsManager.setSpeechRate(rate)
+    }
+
+    fun setPitch(pitch: Float) {
+        app.voiceSettingsManager.setPitch(pitch)
+    }
+
+    fun testVoice() {
+        tts.testVoice()
+    }
+
+    fun setPreferredLanguage(lang: String) {
+        tts.preferredLanguage = lang
+    }
+
+    fun updateCustomApiKey(providerType: AIProviderType, apiKey: String) {
+        when (providerType) {
+            AIProviderType.GEMINI -> app.aiProvider.updateApiKey(apiKey)
+            AIProviderType.OPENROUTER -> {
+                val currentModel = app.aiProvider.settingsManager.settings.value.openRouterModel
+                app.aiProvider.updateOpenRouterConfig(apiKey, currentModel)
+            }
+        }
+    }
+
+    fun selectAIProvider(providerType: AIProviderType) {
+        app.aiProvider.setProviderType(providerType)
+    }
+
+    fun updateOpenRouterConfig(apiKey: String, model: String) {
+        app.aiProvider.updateOpenRouterConfig(apiKey, model)
+    }
+
+    suspend fun testOpenRouterConnection(apiKey: String, model: String): Pair<Boolean, String> {
+        return app.aiProvider.testOpenRouterConnection(apiKey, model)
+    }
+
+    fun clearMissingPermissions() {
+        _uiState.value = _uiState.value.copy(missingPermissions = emptyList())
+    }
+
+    fun runRoutine(routineId: String) {
+        viewModelScope.launch {
+            routineManager.executeRoutine(routineId)
+        }
+    }
+
+    fun toggleRoutine(routineId: String, enabled: Boolean) {
+        routineManager.toggleRoutine(routineId)
+    }
+
+    fun saveRoutine(routine: Routine) {
+        routineManager.saveRoutine(routine)
+    }
+
+    fun deleteRoutine(routineId: String) {
+        routineManager.deleteRoutine(routineId)
+    }
+
+    fun triggerDeviceAction(deviceId: String, action: String, params: Map<String, Any?> = emptyMap()) {
+        viewModelScope.launch {
+            deviceManager.executeDeviceCommand(deviceId, action, params)
+        }
+    }
+
+    fun authorizeDevice(deviceId: String, token: String) {
+        deviceManager.authorizeDevice(deviceId, token)
+    }
+
+    fun addManualDevice(name: String, type: DeviceType, manufacturer: String, conn: ConnectionType, room: String) {
+        deviceManager.addManualDevice(name, type, manufacturer, conn, room)
+    }
+
+    fun removeDevice(deviceId: String) {
+        deviceManager.registry.removeDevice(deviceId)
+    }
+
+    fun renameDevice(deviceId: String, newName: String) {
+        deviceManager.registry.renameDevice(deviceId, newName)
+    }
+
+    // Update methods
+    fun checkForUpdates(isUserInitiated: Boolean = true) {
+        updateManager.checkForUpdates(isUserInitiated)
+    }
+
+    fun startDownloadUpdate(manifest: UpdateManifest) {
         updateManager.startDownload(manifest)
     }
 
@@ -70,31 +479,23 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
         updateManager.cancelDownload()
     }
 
-    fun installUpdate(onResult: (com.example.update.InstallResult) -> Unit = {}) {
+    fun installUpdate(onResult: (InstallResult) -> Unit = {}) {
         viewModelScope.launch {
-            val result = updateManager.installDownloadedApk()
-            onResult(result)
+            val res = updateManager.installDownloadedApk()
+            onResult(res)
         }
     }
 
     fun dismissUpdate(versionCode: Int) {
-        updateManager.dismissUpdate(versionCode)
+        updateManager.preferences.setDismissedVersion(versionCode)
     }
 
     fun setAutoUpdate(enabled: Boolean) {
-        updateManager.preferences.setAutoUpdate(enabled)
-        if (enabled) {
-            com.example.update.BackgroundUpdateWorker.schedulePeriodicCheck(app, updateManager.preferences.settings.value.wifiOnly)
-        } else {
-            com.example.update.BackgroundUpdateWorker.cancelPeriodicCheck(app)
-        }
+        updateManager.preferences.setAutoUpdateEnabled(enabled)
     }
 
     fun setWifiOnly(enabled: Boolean) {
         updateManager.preferences.setWifiOnly(enabled)
-        if (updateManager.preferences.settings.value.autoUpdateEnabled) {
-            com.example.update.BackgroundUpdateWorker.schedulePeriodicCheck(app, enabled)
-        }
     }
 
     fun setAutoDownload(enabled: Boolean) {
@@ -130,20 +531,20 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun setSimulatedMaintenance(enabled: Boolean) {
-        updateManager.remoteConfigManager.setSimulatedMaintenance(enabled)
+        // simulation maintenance toggle if needed
     }
 
     fun clearUpdateCache() {
-        updateManager.clearCache()
+        updateManager.downloader.cleanCache()
     }
 
     fun clearUpdateHistory() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             app.database.updateHistoryDao().clearAll()
         }
     }
 
-    fun setThemeMode(mode: com.example.ui.theme.ThemeMode) {
+    fun setThemeMode(mode: ThemeMode) {
         app.themeManager.setThemeMode(mode)
     }
 
@@ -159,378 +560,8 @@ class JarvisViewModel(application: Application) : AndroidViewModel(application) 
         app.confirmationManager.setWhatsAppConfirmation(enabled)
     }
 
-    init {
-        // Collect speech recognizer listening state
-        viewModelScope.launch {
-            speechRecognizer.isListening.collect { listening ->
-                if (listening && _uiState.value.assistantState != AssistantState.LISTENING) {
-                    _uiState.value = _uiState.value.copy(assistantState = AssistantState.LISTENING)
-                } else if (!listening && _uiState.value.assistantState == AssistantState.LISTENING) {
-                    _uiState.value = _uiState.value.copy(assistantState = AssistantState.IDLE)
-                }
-            }
-        }
-
-        // Collect TTS speaking state
-        viewModelScope.launch {
-            tts.isSpeaking.collect { speaking ->
-                _uiState.value = _uiState.value.copy(isTtsSpeaking = speaking)
-                if (!speaking && _uiState.value.assistantState == AssistantState.SPEAKING) {
-                    _uiState.value = _uiState.value.copy(assistantState = AssistantState.IDLE)
-                }
-            }
-        }
-
-        // Collect recent conversations for Home screen preview
-        viewModelScope.launch {
-            conversationRepo.getRecent(3).collect { recents ->
-                _uiState.value = _uiState.value.copy(recentConversations = recents)
-            }
-        }
-
-        // Automatic update check on app launch
-        viewModelScope.launch {
-            if (updateManager.preferences.settings.value.autoUpdateEnabled) {
-                updateManager.checkForUpdates(isUserInitiated = false)
-            }
-        }
-    }
-
-    fun startListening() {
-        tts.stop()
-        _uiState.value = _uiState.value.copy(
-            assistantState = AssistantState.LISTENING,
-            currentCommand = "",
-            pendingConfirmation = null
-        )
-
-        val recognitionLanguage = app.voiceSettingsManager.getCurrentSttLanguageTag()
-
-        speechRecognizer.startListening(
-            language = recognitionLanguage
-        ) { event ->
-            when (event) {
-                is SpeechEvent.Ready -> {
-                    _uiState.value = _uiState.value.copy(
-                        assistantState = AssistantState.LISTENING,
-                        assistantResponse = "Listening... Speak your command now."
-                    )
-                }
-                is SpeechEvent.BeginningOfSpeech -> {
-                    _uiState.value = _uiState.value.copy(
-                        assistantState = AssistantState.LISTENING
-                    )
-                }
-                is SpeechEvent.EndOfSpeech -> {
-                    _uiState.value = _uiState.value.copy(
-                        assistantState = AssistantState.THINKING,
-                        audioRmsLevel = 0f
-                    )
-                }
-                is SpeechEvent.RmsChanged -> {
-                    _uiState.value = _uiState.value.copy(audioRmsLevel = event.normalizedLevel)
-                }
-                is SpeechEvent.PartialResult -> {
-                    _uiState.value = _uiState.value.copy(currentCommand = event.text)
-                }
-                is SpeechEvent.FinalResult -> {
-                    _uiState.value = _uiState.value.copy(
-                        currentCommand = event.text,
-                        audioRmsLevel = 0f
-                    )
-                    processCommand(event.text)
-                }
-                is SpeechEvent.Error -> {
-                    // Check if any speech was partially captured before the timeout or error
-                    val fallbackText = _uiState.value.currentCommand.trim()
-                    if (fallbackText.isNotBlank() && fallbackText.length >= 2) {
-                        _uiState.value = _uiState.value.copy(
-                            audioRmsLevel = 0f
-                        )
-                        processCommand(fallbackText)
-                        return@startListening
-                    }
-
-                    if (event.errorCode == android.speech.SpeechRecognizer.ERROR_NO_MATCH ||
-                        event.errorCode == android.speech.SpeechRecognizer.ERROR_SPEECH_TIMEOUT
-                    ) {
-                        // Normal voice silence or timeout - return to IDLE with helpful prompt
-                        _uiState.value = _uiState.value.copy(
-                            assistantState = AssistantState.IDLE,
-                            assistantResponse = "I didn't catch that. Tap the mic to speak again, or type below."
-                        )
-                    } else if (event.errorCode == SpeechRecognizerManager.ERROR_SERVER_DISCONNECTED ||
-                        event.errorCode == android.speech.SpeechRecognizer.ERROR_RECOGNIZER_BUSY ||
-                        event.errorCode == android.speech.SpeechRecognizer.ERROR_CLIENT
-                    ) {
-                        // Transient connection reset - reset engine and return to IDLE without locking screen
-                        _uiState.value = _uiState.value.copy(
-                            assistantState = AssistantState.IDLE,
-                            assistantResponse = "Voice engine ready. Tap the mic or enter your command below."
-                        )
-                    } else {
-                        _uiState.value = _uiState.value.copy(
-                            assistantState = AssistantState.ERROR,
-                            assistantResponse = event.message
-                        )
-                    }
-                }
-            }
-        }
-    }
-
-    fun submitVoiceCommand(spokenText: String) {
-        val trimmed = spokenText.trim()
-        if (trimmed.isNotBlank()) {
-            _uiState.value = _uiState.value.copy(
-                currentCommand = trimmed,
-                assistantState = AssistantState.THINKING,
-                audioRmsLevel = 0f
-            )
-            processCommand(trimmed)
-        }
-    }
-
-    fun stopListening() {
-        speechRecognizer.stopListening()
-        if (_uiState.value.assistantState == AssistantState.LISTENING) {
-            _uiState.value = _uiState.value.copy(assistantState = AssistantState.IDLE)
-        }
-    }
-
-    fun processCommand(command: String) {
-        if (command.isBlank()) return
-        stopListening()
-        tts.stop()
-
-        _uiState.value = _uiState.value.copy(
-            currentCommand = command,
-            assistantState = AssistantState.THINKING
-        )
-
-        viewModelScope.launch {
-            agent.executeCommand(
-                rawCommand = command,
-                onStateChange = { agentState ->
-                    when (agentState) {
-                        is AgentExecutionState.Idle -> {
-                            _uiState.value = _uiState.value.copy(assistantState = AssistantState.IDLE)
-                        }
-                        is AgentExecutionState.Listening -> {
-                            _uiState.value = _uiState.value.copy(assistantState = AssistantState.LISTENING)
-                        }
-                        is AgentExecutionState.Thinking -> {
-                            _uiState.value = _uiState.value.copy(
-                                assistantState = AssistantState.THINKING,
-                                currentCommand = agentState.command
-                            )
-                        }
-                        is AgentExecutionState.Executing -> {
-                            _uiState.value = _uiState.value.copy(
-                                assistantState = AssistantState.EXECUTING,
-                                activeToolName = agentState.toolName
-                            )
-                        }
-                        is AgentExecutionState.AwaitingConfirmation -> {
-                            _uiState.value = _uiState.value.copy(
-                                pendingConfirmation = agentState.request
-                            )
-                        }
-                        is AgentExecutionState.MissingPermission -> {
-                            _uiState.value = _uiState.value.copy(
-                                assistantState = AssistantState.ERROR,
-                                missingPermissions = agentState.permissions
-                            )
-                        }
-                        is AgentExecutionState.Speaking -> {
-                            _uiState.value = _uiState.value.copy(
-                                assistantState = AssistantState.SPEAKING,
-                                assistantResponse = agentState.response,
-                                activeToolName = agentState.toolName,
-                                activeToolResult = agentState.result
-                            )
-                            tts.speak(agentState.response)
-                        }
-                        is AgentExecutionState.Error -> {
-                            _uiState.value = _uiState.value.copy(
-                                assistantState = AssistantState.ERROR,
-                                assistantResponse = agentState.message
-                            )
-                        }
-                    }
-                },
-                onFinished = { response, toolResult ->
-                    _uiState.value = _uiState.value.copy(
-                        assistantResponse = response,
-                        activeToolResult = toolResult
-                    )
-                }
-            )
-        }
-    }
-
-    fun confirmPendingAction() {
-        val request = _uiState.value.pendingConfirmation ?: return
-        _uiState.value = _uiState.value.copy(pendingConfirmation = null)
-        viewModelScope.launch {
-            request.onConfirm()
-        }
-    }
-
-    fun cancelPendingAction() {
-        val request = _uiState.value.pendingConfirmation ?: return
-        _uiState.value = _uiState.value.copy(pendingConfirmation = null)
-        request.onCancel()
-    }
-
-    fun toggleVoiceMute() {
-        val newMuted = !_uiState.value.isVoiceMuted
-        tts.isVoiceEnabled = !newMuted
-        if (newMuted) tts.stop()
-        _uiState.value = _uiState.value.copy(isVoiceMuted = newMuted)
-    }
-
-    fun speakCurrentResponse() {
-        tts.speak(_uiState.value.assistantResponse)
-    }
-
-    fun clearHistory() {
-        viewModelScope.launch {
-            conversationRepo.clearAll()
-        }
-    }
-
-    fun deleteHistoryItem(id: Long) {
-        viewModelScope.launch {
-            conversationRepo.deleteById(id)
-        }
-    }
-
-    fun saveMemory(key: String, value: String) {
-        viewModelScope.launch {
-            memoryRepo.saveMemory(key, value)
-        }
-    }
-
-    fun deleteMemory(memory: MemoryEntity) {
-        viewModelScope.launch {
-            memoryRepo.deleteMemory(memory)
-        }
-    }
-
-    fun clearAllMemories() {
-        viewModelScope.launch {
-            memoryRepo.clearAll()
-        }
-    }
-
-    fun setVoiceLanguage(langCode: String) {
-        tts.stop()
-        app.voiceSettingsManager.setLanguage(langCode)
-        tts.refreshAvailableVoices()
-        tts.applyVoiceSettings()
-    }
-
-    fun setVoice(voiceId: String) {
-        app.voiceSettingsManager.setVoice(voiceId)
-        tts.applyVoiceSettings()
-    }
-
-    fun setSpeechRate(rate: Float) {
-        app.voiceSettingsManager.setSpeechRate(rate)
-        tts.applyVoiceSettings()
-    }
-
-    fun setPitch(pitch: Float) {
-        app.voiceSettingsManager.setPitch(pitch)
-        tts.applyVoiceSettings()
-    }
-
-    fun testVoice() {
-        tts.testVoice()
-    }
-
-    fun setPreferredLanguage(lang: String) {
-        setVoiceLanguage(lang)
-    }
-
-    fun updateCustomApiKey(key: String) {
-        app.aiProvider.updateApiKey(key)
-    }
-
-    fun selectAIProvider(providerType: AIProviderType) {
-        app.aiProvider.setProviderType(providerType)
-    }
-
-    fun updateOpenRouterConfig(apiKey: String, model: String) {
-        app.aiProvider.updateOpenRouterConfig(apiKey, model)
-    }
-
-    suspend fun testOpenRouterConnection(apiKey: String, model: String): Pair<Boolean, String> {
-        return app.aiProvider.testOpenRouterConnection(apiKey, model)
-    }
-
-    fun clearMissingPermissions() {
-        _uiState.value = _uiState.value.copy(missingPermissions = emptyList())
-    }
-
-    fun runRoutine(routineId: String) {
-        viewModelScope.launch {
-            val result = routineManager.executeRoutine(routineId)
-            _uiState.value = _uiState.value.copy(
-                assistantResponse = result.message,
-                activeToolResult = result
-            )
-        }
-    }
-
-    fun toggleRoutine(routineId: String) {
-        routineManager.toggleRoutine(routineId)
-    }
-
-    fun saveRoutine(routine: com.example.routines.Routine) {
-        routineManager.saveRoutine(routine)
-    }
-
-    fun deleteRoutine(routineId: String) {
-        routineManager.deleteRoutine(routineId)
-    }
-
-    fun triggerDeviceAction(deviceId: String, command: String, params: Map<String, Any?> = emptyMap()) {
-        viewModelScope.launch {
-            val result = deviceManager.executeDeviceCommand(deviceId, command, params)
-            _uiState.value = _uiState.value.copy(
-                assistantResponse = result.message,
-                activeToolResult = result
-            )
-        }
-    }
-
-    fun authorizeDevice(deviceId: String, token: String): Boolean {
-        return deviceManager.authorizeDevice(deviceId, token)
-    }
-
-    fun addManualDevice(
-        name: String,
-        type: com.example.devices.DeviceType,
-        manufacturer: String,
-        conn: com.example.devices.ConnectionType,
-        room: String
-    ) {
-        deviceManager.addManualDevice(name, type, manufacturer, conn, room)
-    }
-
-    fun removeDevice(deviceId: String) {
-        deviceManager.registry.removeDevice(deviceId)
-    }
-
-    fun renameDevice(deviceId: String, newName: String) {
-        deviceManager.registry.renameDevice(deviceId, newName)
-    }
-
     override fun onCleared() {
         super.onCleared()
         speechRecognizer.stopListening()
-        tts.stop()
     }
 }
