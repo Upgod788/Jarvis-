@@ -346,7 +346,7 @@ fun MemoryScreen(
                                 )
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(
-                                    text = "Say \"JARVIS, remember that my name is Rahul\" or tap '+' below.",
+                                    text = "Say \"Ravan, remember that my name is Rahul\" or tap '+' below.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.primary
                                 )
@@ -469,7 +469,7 @@ fun MemoryScreen(
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                         ) {
                             Text(
-                                text = "No memory activity recorded yet. As JARVIS learns, modifies, or forgets facts, events will appear here.",
+                                text = "No memory activity recorded yet. As Ravan learns, modifies, or forgets facts, events will appear here.",
                                 modifier = Modifier.padding(20.dp),
                                 style = MaterialTheme.typography.bodyMedium
                             )
@@ -664,7 +664,7 @@ fun MemoryScreen(
         AlertDialog(
             onDismissRequest = { memoryToDelete = null },
             title = { Text("Forget Memory?") },
-            text = { Text("Are you sure you want JARVIS to forget \"${mem.effectiveText}\"? This cannot be undone.") },
+            text = { Text("Are you sure you want Ravan to forget \"${mem.effectiveText}\"? This cannot be undone.") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -689,7 +689,7 @@ fun MemoryScreen(
         AlertDialog(
             onDismissRequest = { showClearAllConfirm = false },
             title = { Text("Clear All Memories?") },
-            text = { Text("This will permanently delete all stored preferences, facts, and conversation context from JARVIS local storage.") },
+            text = { Text("This will permanently delete all stored preferences, facts, and conversation context from Ravan local storage.") },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -717,7 +717,7 @@ fun MemoryScreen(
             text = {
                 Column {
                     Text(
-                        text = "You can copy this JSON backup of all JARVIS memories:",
+                        text = "You can copy this JSON backup of all Ravan memories:",
                         style = MaterialTheme.typography.bodySmall
                     )
                     Spacer(modifier = Modifier.height(8.dp))
@@ -736,7 +736,7 @@ fun MemoryScreen(
                 TextButton(
                     onClick = {
                         val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        cm.setPrimaryClip(ClipData.newPlainText("JARVIS Memories", exportedJsonText))
+                        cm.setPrimaryClip(ClipData.newPlainText("Ravan Memories", exportedJsonText))
                         showExportDialog = false
                         Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
                     }

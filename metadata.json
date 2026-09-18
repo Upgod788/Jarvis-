@@ -1,5 +1,5 @@
 {
-  "name": "JARVIS AI",
+  "name": "Ravan AI",
   "description": "Real Android voice assistant with natural language command execution, tool calling, speech recognition, TTS, and Room memory.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

@@ -19,11 +19,11 @@ class WakeWordManager {
     var isEnabled: Boolean = false
     private val _isWakeWordListening = MutableStateFlow(false)
     val isWakeWordListening: StateFlow<Boolean> = _isWakeWordListening.asStateFlow()
-    var wakeWordPhrase: String = "Hey JARVIS"
+    var wakeWordPhrase: String = "Hey Ravan"
 
     fun checkSpeechForWakeWord(text: String): Boolean {
         val clean = text.trim().lowercase(Locale.ROOT)
-        return clean.contains("hey jarvis") || clean.contains("jarvis")
+        return clean.contains("hey ravan") || clean.contains("ravan") || clean.contains("hey jarvis") || clean.contains("jarvis")
     }
 
     fun setListening(active: Boolean) {

@@ -128,7 +128,7 @@ class OpenRouterAIProvider(
             "- ${it.name}: ${it.description}"
         }
         return """
-        You are JARVIS personal Android assistant.
+        You are Ravan personal Android assistant.
         $langBlock$personalityBlock$memoryBlock
         Respond strictly in JSON format:
         {"tool": "ToolName", "params": {}} OR {"response": "Spoken text"}

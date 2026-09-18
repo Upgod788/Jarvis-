@@ -7,7 +7,7 @@ object MemoryRanker {
 
     private val STOP_WORDS = setOf(
         "the", "a", "an", "is", "in", "to", "at", "for", "of", "and", "or", "that", "this",
-        "my", "i", "me", "you", "user", "your", "with", "as", "on", "can", "please", "jarvis",
+        "my", "i", "me", "you", "user", "your", "with", "as", "on", "can", "please", "ravan", "jarvis",
         "what", "how", "why", "tell", "show", "give", "do", "does", "did", "are", "was", "were"
     )
 

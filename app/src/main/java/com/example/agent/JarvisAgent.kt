@@ -150,7 +150,7 @@ class JarvisAgent(
             // 6. Check for implicit persistent facts to suggest to user
             checkMemorySuggestion(trimmed)
         } catch (e: Exception) {
-            val errorMsg = "JARVIS encountered an error: ${e.localizedMessage ?: "Unknown error"}"
+            val errorMsg = "Ravan encountered an error: ${e.localizedMessage ?: "Unknown error"}"
             onStateChange(AgentExecutionState.Error(errorMsg))
             onFinished(errorMsg, ToolResult.error(errorMsg))
         }
@@ -235,7 +235,7 @@ class JarvisAgent(
             }
             is MemoryVoiceAction.ClearAll -> {
                 val count = mm.clearAll()
-                "All JARVIS long-term memories ($count items) have been cleared, sir."
+                "All Ravan long-term memories ($count items) have been cleared, sir."
             }
             is MemoryVoiceAction.ClearConversations -> {
                 val count = mm.clearConversations()

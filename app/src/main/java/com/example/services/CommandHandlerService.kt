@@ -129,7 +129,7 @@ class CommandHandlerService : Service() {
                     IntentActionType.DOWNLOAD_UPDATE,
                     mapOf("action" to "download"),
                     "update",
-                    "Starting download of JARVIS update."
+                    "Starting download of Ravan update."
                 )
             }
             if (lowerCombined.contains("what's new") || lowerCombined.contains("whats new") || lowerCombined.contains("changelog") || lowerCombined.contains("release notes")) {
@@ -145,7 +145,7 @@ class CommandHandlerService : Service() {
                     IntentActionType.CHECK_UPDATE,
                     mapOf("action" to "check"),
                     "update",
-                    "Checking for JARVIS updates."
+                    "Checking for Ravan updates."
                 )
             }
 

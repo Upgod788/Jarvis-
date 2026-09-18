@@ -120,10 +120,10 @@ class ConfirmationManager(context: Context? = null) {
             }
             "CallContactTool" -> {
                 val target = params["contactName"] ?: params["phoneNumber"] ?: "contact"
-                Pair("Confirm Phone Call", "Do you want JARVIS to place a call to \"$target\"?")
+                Pair("Confirm Phone Call", "Do you want Ravan to place a call to \"$target\"?")
             }
             else -> {
-                Pair("Confirm Action", "Do you want JARVIS to execute ${tool.name}?")
+                Pair("Confirm Action", "Do you want Ravan to execute ${tool.name}?")
             }
         }
     }

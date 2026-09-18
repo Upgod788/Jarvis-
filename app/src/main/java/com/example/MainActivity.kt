@@ -206,10 +206,10 @@ fun JarvisApp(viewModel: JarvisViewModel) {
                 title = { Text("Remember This Fact?") },
                 text = {
                     Column {
-                        Text("JARVIS noticed: \"${suggestion.content}\"")
+                        Text("Ravan noticed: \"${suggestion.content}\"")
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            "Would you like JARVIS to remember this for future conversations?",
+                            "Would you like Ravan to remember this for future conversations?",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

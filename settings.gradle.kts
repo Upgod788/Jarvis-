@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "JARVIS AI"
+rootProject.name = "Ravan AI"
 include(":app")

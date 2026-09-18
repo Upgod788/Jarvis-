@@ -77,11 +77,13 @@ class SpeechRecognizerManager(
 
                     override fun onEndOfSpeech() {
                         _isListening.value = false
+                        _rmsLevel.value = 0f
                         onEvent(SpeechEvent.EndOfSpeech)
                     }
 
                     override fun onError(error: Int) {
                         _isListening.value = false
+                        _rmsLevel.value = 0f
                         releaseAudioFocus()
                         val msg = when (error) {
                             SpeechRecognizer.ERROR_AUDIO -> "Audio recording error"
@@ -101,6 +103,7 @@ class SpeechRecognizerManager(
 
                     override fun onResults(results: Bundle?) {
                         _isListening.value = false
+                        _rmsLevel.value = 0f
                         releaseAudioFocus()
                         val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                         val text = matches?.firstOrNull() ?: ""

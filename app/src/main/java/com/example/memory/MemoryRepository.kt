@@ -117,7 +117,7 @@ class MemoryRepository(
 
     suspend fun clearAll(): Int {
         val count = memoryDao.clearAllMemories()
-        logEvent("CLEARED", "Cleared all JARVIS long-term memory ($count items).")
+        logEvent("CLEARED", "Cleared all Ravan long-term memory ($count items).")
         return count
     }
 

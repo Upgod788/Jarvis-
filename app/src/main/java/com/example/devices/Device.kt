@@ -30,7 +30,7 @@ enum class ConnectionType(val displayName: String) {
     BLUETOOTH("Bluetooth"),
     LOCAL_NETWORK("Local Network"),
     CLOUD_INTEGRATION("Cloud API"),
-    COMPANION_AGENT("JARVIS Companion Agent"),
+    COMPANION_AGENT("Ravan Companion Agent"),
     SYSTEM("Android System")
 }
 
@@ -106,7 +106,7 @@ class DeviceRegistry(private val context: Context) {
                 deviceId = "dev_light_living",
                 name = "Living Room Light",
                 type = DeviceType.SMART_LIGHT,
-                manufacturer = "JARVIS Smart Home",
+                manufacturer = "Ravan Smart Home",
                 connectionType = ConnectionType.WIFI,
                 capabilities = listOf(Capability.POWER, Capability.BRIGHTNESS, Capability.COLOR),
                 status = DeviceStatus.ONLINE,
@@ -115,7 +115,7 @@ class DeviceRegistry(private val context: Context) {
             ),
             Device(
                 deviceId = "dev_pc_workstation",
-                name = "JARVIS PC Workstation",
+                name = "Ravan PC Workstation",
                 type = DeviceType.PC,
                 manufacturer = "Custom PC",
                 connectionType = ConnectionType.COMPANION_AGENT,

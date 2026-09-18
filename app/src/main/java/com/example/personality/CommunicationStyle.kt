@@ -9,7 +9,7 @@ enum class CommunicationStyle(
     PROFESSIONAL(
         id = "professional",
         displayName = "Professional",
-        description = "Polite, structured, formal, and precise with classic JARVIS protocol.",
+        description = "Polite, structured, formal, and precise with classic Ravan protocol.",
         promptInstruction = "Speak with classic British butler-like courtesy, polite precision, and structured phrasing. Use address like 'Sir' or 'Ma'am' when appropriate."
     ),
     FRIENDLY(

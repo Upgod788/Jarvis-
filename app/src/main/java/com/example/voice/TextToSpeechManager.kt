@@ -173,7 +173,7 @@ class TextToSpeechManager(
 
     fun testVoice(sampleText: String? = null) {
         val sample = sampleText ?: voiceSettingsManager?.getCurrentLanguage()?.sampleText
-            ?: "Systems online. JARVIS is ready."
+            ?: "Systems online. Ravan is ready."
         speak(sample)
     }
 

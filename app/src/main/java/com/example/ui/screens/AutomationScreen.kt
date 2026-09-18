@@ -143,7 +143,7 @@ fun AutomationScreen(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
                     Text(
-                        text = "No routines found. Say \"Hey JARVIS, run Good Morning routine\" to initiate.",
+                        text = "No routines found. Say \"Hey Ravan, run Good Morning routine\" to initiate.",
                         modifier = Modifier.padding(24.dp),
                         style = MaterialTheme.typography.bodyMedium
                     )

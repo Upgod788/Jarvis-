@@ -268,7 +268,7 @@ fun SettingsScreen(
             }
         }
 
-        // Section: JARVIS Personality & Communication Style
+        // Section: Ravan Personality & Communication Style
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -279,12 +279,12 @@ fun SettingsScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.AccountCircle, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                         Spacer(modifier = Modifier.size(8.dp))
-                        Text("JARVIS Personality", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                        Text("Ravan Personality", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
                     }
 
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Customize JARVIS's conversational attitude and demeanor",
+                        text = "Customize Ravan's conversational attitude and demeanor",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -345,7 +345,7 @@ fun SettingsScreen(
 
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "JARVIS stores your preferences and routines 100% locally on your device.",
+                        text = "Ravan stores your preferences and routines 100% locally on your device.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

@@ -7,7 +7,7 @@ import com.example.tools.ToolResult
 data class JarvisUiState(
     val assistantState: AssistantState = AssistantState.IDLE,
     val currentCommand: String = "",
-    val assistantResponse: String = "Hello, I'm JARVIS.\nTap the microphone or say \"Hey JARVIS\".",
+    val assistantResponse: String = "Hello, I'm Ravan.\nTap the microphone or say \"Hey Ravan\".",
     val activeToolName: String? = null,
     val activeToolResult: ToolResult? = null,
     val audioRmsLevel: Float = 0.0f,

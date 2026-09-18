@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="accessibility_service_description">Enables JARVIS to interact with supported applications on your behalf to assist with commands when direct Android APIs are restricted.</string>
-    <string name="accessibility_service_label">JARVIS Accessibility Assistant</string>
+    <string name="accessibility_service_description">Enables Ravan to interact with supported applications on your behalf to assist with commands when direct Android APIs are restricted.</string>
+    <string name="accessibility_service_label">Ravan Accessibility Assistant</string>
     <string name="androidx_startup">androidx.startup</string>
-    <string name="app_name">JARVIS AI</string>
+    <string name="app_name">Ravan AI</string>
     <string name="call_notification_answer_action">Answer</string>
     <string name="call_notification_answer_video_action">Video</string>
     <string name="call_notification_decline_action">Decline</string>
@@ -100,8 +100,8 @@
     <string name="mic_permission_cancel">Use Text Only</string>
     <string name="mic_permission_grant">Grant Access</string>
     <string name="mic_permission_open_settings">Open Settings</string>
-    <string name="mic_permission_permanently_denied">Microphone permission has been disabled. To use voice commands with JARVIS, please enable Microphone access in Android Settings.</string>
-    <string name="mic_permission_rationale">JARVIS requires microphone permission to listen to your voice commands, process natural language, and activate hands-free operations.</string>
+    <string name="mic_permission_permanently_denied">Microphone permission has been disabled. To use voice commands with Ravan, please enable Microphone access in Android Settings.</string>
+    <string name="mic_permission_rationale">Ravan requires microphone permission to listen to your voice commands, process natural language, and activate hands-free operations.</string>
     <string name="mic_permission_title">Microphone Access Required</string>
     <string name="nav_history">History</string>
     <string name="nav_home">Home</string>

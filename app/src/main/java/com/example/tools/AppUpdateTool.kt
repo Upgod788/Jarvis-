@@ -11,7 +11,7 @@ class AppUpdateTool(
 ) : Tool {
     override val name: String = "app_update"
     override val description: String =
-        "Check for JARVIS application updates, download the latest version, view release notes, or initiate official Android package installation."
+        "Check for Ravan application updates, download the latest version, view release notes, or initiate official Android package installation."
 
     override val parameters: List<ToolParameter> = listOf(
         ToolParameter(
@@ -37,7 +37,7 @@ class AppUpdateTool(
                     is CheckResult.UpdateAvailable -> {
                         val m = checkResult.manifest
                         ToolResult.ok(
-                            "A new update for JARVIS is available: v${m.latestVersionName} (Build ${m.latestVersionCode}). Release notes: ${m.releaseNotes}. Say 'Update JARVIS' or 'Download update' to proceed.",
+                            "A new update for Ravan is available: v${m.latestVersionName} (Build ${m.latestVersionCode}). Release notes: ${m.releaseNotes}. Say 'Update Ravan' or 'Download update' to proceed.",
                             mapOf(
                                 "versionName" to m.latestVersionName,
                                 "versionCode" to m.latestVersionCode,
@@ -49,7 +49,7 @@ class AppUpdateTool(
                     }
                     is CheckResult.UpToDate -> {
                         ToolResult.ok(
-                            "JARVIS is currently up to date on v${checkResult.currentVersionName} (Build ${checkResult.currentVersionCode}). No new updates found.",
+                            "Ravan is currently up to date on v${checkResult.currentVersionName} (Build ${checkResult.currentVersionCode}). No new updates found.",
                             mapOf(
                                 "versionName" to checkResult.currentVersionName,
                                 "versionCode" to checkResult.currentVersionCode
@@ -96,7 +96,7 @@ class AppUpdateTool(
                     }
                     is InstallResult.PermissionRequired -> {
                         ToolResult.requiresUserAction(
-                            "Permission needed: Please enable 'Install unknown apps' for JARVIS in system settings to complete the update.",
+                            "Permission needed: Please enable 'Install unknown apps' for Ravan in system settings to complete the update.",
                             mapOf("action" to "grant_install_unknown_apps")
                         )
                     }
@@ -107,19 +107,19 @@ class AppUpdateTool(
             }
             "status" -> {
                 when (val st = updateManager.status.value) {
-                    is UpdateStatus.Idle -> ToolResult.ok("JARVIS update status is idle. Current version is v${updateManager.currentVersionName}.")
+                    is UpdateStatus.Idle -> ToolResult.ok("Ravan update status is idle. Current version is v${updateManager.currentVersionName}.")
                     is UpdateStatus.Checking -> ToolResult.ok("Checking for new updates...")
                     is UpdateStatus.Available -> ToolResult.ok("Update v${st.manifest.latestVersionName} is available.")
                     is UpdateStatus.Downloading -> ToolResult.ok("Downloading update: ${st.progress}% completed.")
                     is UpdateStatus.ReadyToInstall -> ToolResult.ok("Update v${st.manifest.latestVersionName} is downloaded and ready to install.")
                     is UpdateStatus.Installing -> ToolResult.ok("Installation in progress...")
-                    is UpdateStatus.UpToDate -> ToolResult.ok("JARVIS is up to date (v${st.versionName}).")
+                    is UpdateStatus.UpToDate -> ToolResult.ok("Ravan is up to date (v${st.versionName}).")
                     is UpdateStatus.Error -> ToolResult.error("Update system encountered an error: ${st.message}")
                 }
             }
             "version" -> {
                 ToolResult.ok(
-                    "Current JARVIS Version: v${updateManager.currentVersionName} (Build ${updateManager.currentVersionCode})",
+                    "Current Ravan Version: v${updateManager.currentVersionName} (Build ${updateManager.currentVersionCode})",
                     mapOf(
                         "versionName" to updateManager.currentVersionName,
                         "versionCode" to updateManager.currentVersionCode
@@ -131,7 +131,7 @@ class AppUpdateTool(
                 if (res is CheckResult.UpdateAvailable) {
                     ToolResult.ok("What's new in v${res.manifest.latestVersionName}:\n${res.manifest.releaseNotes}")
                 } else {
-                    ToolResult.ok("You are running JARVIS v${updateManager.currentVersionName}. Systems operating normally.")
+                    ToolResult.ok("You are running Ravan v${updateManager.currentVersionName}. Systems operating normally.")
                 }
             }
             else -> {

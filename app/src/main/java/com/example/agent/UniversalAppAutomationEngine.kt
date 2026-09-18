@@ -39,7 +39,7 @@ object UniversalAppAutomationEngine {
 
     fun clickElement(context: Context, targetText: String): ToolResult {
         val service = JarvisAccessibilityService.instance
-            ?: return ToolResult.error("Jarvis Accessibility Service is not active. Please enable it in Settings.")
+            ?: return ToolResult.error("Ravan Accessibility Service is not active. Please enable it in Settings.")
         val success = service.clickNodeWithText(targetText)
         return if (success) {
             ToolResult.ok("Clicked '$targetText'.")
@@ -50,7 +50,7 @@ object UniversalAppAutomationEngine {
 
     fun typeText(context: Context, text: String): ToolResult {
         val service = JarvisAccessibilityService.instance
-            ?: return ToolResult.error("Jarvis Accessibility Service is not active.")
+            ?: return ToolResult.error("Ravan Accessibility Service is not active.")
         val success = service.typeTextIntoFocusedField(text)
         return if (success) {
             ToolResult.ok("Typed text: '$text'.")
@@ -61,7 +61,7 @@ object UniversalAppAutomationEngine {
 
     fun scroll(context: Context, forward: Boolean = true): ToolResult {
         val service = JarvisAccessibilityService.instance
-            ?: return ToolResult.error("Jarvis Accessibility Service is not active.")
+            ?: return ToolResult.error("Ravan Accessibility Service is not active.")
         val success = if (forward) service.scrollForward() else service.scrollBackward()
         return if (success) {
             ToolResult.ok("Scrolled screen.")
@@ -72,7 +72,7 @@ object UniversalAppAutomationEngine {
 
     fun goBack(context: Context): ToolResult {
         val service = JarvisAccessibilityService.instance
-            ?: return ToolResult.error("Jarvis Accessibility Service is not active.")
+            ?: return ToolResult.error("Ravan Accessibility Service is not active.")
         val success = service.performBackAction()
         return if (success) {
             ToolResult.ok("Went back.")

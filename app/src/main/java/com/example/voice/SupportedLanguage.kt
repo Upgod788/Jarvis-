@@ -39,7 +39,7 @@ object VoiceLanguageRegistry {
             nativeName = "English (US)",
             sttLanguageTag = "en-US",
             ttsLocale = Locale.US,
-            sampleText = "Hello! I am JARVIS, your personal Android AI assistant. How may I help you today?",
+            sampleText = "Hello! I am Ravan, your personal Android AI assistant. How may I help you today?",
             aiPromptInstruction = "The user has selected English. Respond in natural, clear, and concise English.",
             additionalLangs = arrayOf("en-US", "en-IN")
         ),
@@ -49,7 +49,7 @@ object VoiceLanguageRegistry {
             nativeName = "Indian English",
             sttLanguageTag = "en-IN",
             ttsLocale = Locale("en", "IN"),
-            sampleText = "Hello! I am JARVIS. Systems are online and ready for your command.",
+            sampleText = "Hello! I am Ravan. Systems are online and ready for your command.",
             aiPromptInstruction = "The user has selected Indian English. Respond in natural, polite Indian English.",
             additionalLangs = arrayOf("en-IN", "en-US", "hi-IN")
         ),
@@ -59,7 +59,7 @@ object VoiceLanguageRegistry {
             nativeName = "हिन्दी",
             sttLanguageTag = "hi-IN",
             ttsLocale = Locale("hi", "IN"),
-            sampleText = "नमस्ते! मैं जार्विस हूँ। मैं आपकी किस प्रकार सहायता कर सकता हूँ?",
+            sampleText = "नमस्ते! मैं रावण हूँ। मैं आपकी किस प्रकार सहायता कर सकता हूँ?",
             aiPromptInstruction = "The user has selected Hindi. Respond entirely in natural, respectful Hindi (Devanagari script) unless the user explicitly asks for another language.",
             additionalLangs = arrayOf("hi-IN", "en-IN")
         ),
@@ -69,7 +69,7 @@ object VoiceLanguageRegistry {
             nativeName = "Hinglish",
             sttLanguageTag = "hi-IN",
             ttsLocale = Locale("en", "IN"),
-            sampleText = "Hello sir! Main JARVIS hoon. Main aapki kya madad kar sakta hoon?",
+            sampleText = "Hello sir! Main Ravan hoon. Main aapki kya madad kar sakta hoon?",
             aiPromptInstruction = "The user has selected Hinglish (Hindi-English). Respond naturally in conversational Hinglish using Roman script (for example: 'Haan sir, main aapki call connect kar raha hoon.') unless the user explicitly requests otherwise.",
             additionalLangs = arrayOf("hi-IN", "en-IN", "en-US")
         ),
@@ -79,7 +79,7 @@ object VoiceLanguageRegistry {
             nativeName = "বাংলা",
             sttLanguageTag = "bn-IN",
             ttsLocale = Locale("bn", "IN"),
-            sampleText = "নমস্কার! আমি জারভিস। আমি আপনাকে কীভাবে সাহায্য করতে পারি?",
+            sampleText = "নমস্কার! আমি রাবণ। আমি আপনাকে কীভাবে সাহায্য করতে পারি?",
             aiPromptInstruction = "The user has selected Bengali. Respond entirely in natural, polite Bengali (Bengali script) unless the user explicitly asks for another language.",
             additionalLangs = arrayOf("bn-IN", "en-IN")
         ),
@@ -89,7 +89,7 @@ object VoiceLanguageRegistry {
             nativeName = "தமிழ்",
             sttLanguageTag = "ta-IN",
             ttsLocale = Locale("ta", "IN"),
-            sampleText = "வணக்கம்! நான் ஜார்விஸ். நான் உங்களுக்கு எவ்வாறு உதவ முடியும்?",
+            sampleText = "வணக்கம்! நான் ராவணன். நான் உங்களுக்கு எவ்வாறு உதவ முடியும்?",
             aiPromptInstruction = "The user has selected Tamil. Respond entirely in natural, polite Tamil (Tamil script) unless the user explicitly asks for another language.",
             additionalLangs = arrayOf("ta-IN", "en-IN")
         ),
@@ -99,7 +99,7 @@ object VoiceLanguageRegistry {
             nativeName = "తెలుగు",
             sttLanguageTag = "te-IN",
             ttsLocale = Locale("te", "IN"),
-            sampleText = "నమస్కారం! నేను జార్విస్. నేను మీకు ఎలా సహాయపడగలను?",
+            sampleText = "నమస్కారం! నేను రావణన్. నేను మీకు ఎలా సహాయపడగలను?",
             aiPromptInstruction = "The user has selected Telugu. Respond entirely in natural, polite Telugu (Telugu script) unless the user explicitly asks for another language.",
             additionalLangs = arrayOf("te-IN", "en-IN")
         ),
@@ -109,7 +109,7 @@ object VoiceLanguageRegistry {
             nativeName = "मराठी",
             sttLanguageTag = "mr-IN",
             ttsLocale = Locale("mr", "IN"),
-            sampleText = "नमस्कार! मी जार्विस आहे. मी तुम्हाला कशी मदत करू शकतो?",
+            sampleText = "नमस्कार! मी रावण आहे. मी तुम्हाला कशी मदत करू शकतो?",
             aiPromptInstruction = "The user has selected Marathi. Respond entirely in natural, polite Marathi (Devanagari script) unless the user explicitly asks for another language.",
             additionalLangs = arrayOf("mr-IN", "hi-IN", "en-IN")
         ),
@@ -119,7 +119,7 @@ object VoiceLanguageRegistry {
             nativeName = "ગુજરાતી",
             sttLanguageTag = "gu-IN",
             ttsLocale = Locale("gu", "IN"),
-            sampleText = "નમસ્તે! હું જાર્વિસ છું. હું તમને કેવી રીતે મદદ કરી શકું?",
+            sampleText = "નમસ્તે! હું રાવણ છું. હું તમને કેવી રીતે મદદ કરી શકું?",
             aiPromptInstruction = "The user has selected Gujarati. Respond entirely in natural, polite Gujarati (Gujarati script) unless the user explicitly asks for another language.",
             additionalLangs = arrayOf("gu-IN", "hi-IN", "en-IN")
         ),
@@ -129,7 +129,7 @@ object VoiceLanguageRegistry {
             nativeName = "ಕನ್ನಡ",
             sttLanguageTag = "kn-IN",
             ttsLocale = Locale("kn", "IN"),
-            sampleText = "ನಮಸ್ಕಾರ! ನಾನು ಜಾರ್ವಿಸ್. ನಾನು ನಿಮಗೆ ಹೇಗೆ ಸಹಾಯ ಮಾಡಬಹುದು?",
+            sampleText = "ನಮಸ್ಕಾರ! ನಾನು ರಾವಣ. ನಾನು ನಿಮಗೆ ಹೇಗೆ ಸಹಾಯ ಮಾಡಬಹುದು?",
             aiPromptInstruction = "The user has selected Kannada. Respond entirely in natural, polite Kannada (Kannada script) unless the user explicitly asks for another language.",
             additionalLangs = arrayOf("kn-IN", "en-IN")
         ),
@@ -139,7 +139,7 @@ object VoiceLanguageRegistry {
             nativeName = "മലയാളം",
             sttLanguageTag = "ml-IN",
             ttsLocale = Locale("ml", "IN"),
-            sampleText = "നമസ്കാരം! ഞാൻ ജാർവിസ് ആണ്. ഞാൻ നിങ്ങളെ എങ്ങനെ സഹായിക്കാം?",
+            sampleText = "നമസ്കാരം! ഞാൻ രാവണൻ ആണ്. ഞാൻ നിങ്ങളെ എങ്ങനെ സഹായിക്കാം?",
             aiPromptInstruction = "The user has selected Malayalam. Respond entirely in natural, polite Malayalam (Malayalam script) unless the user explicitly asks for another language.",
             additionalLangs = arrayOf("ml-IN", "en-IN")
         ),
@@ -149,7 +149,7 @@ object VoiceLanguageRegistry {
             nativeName = "ਪੰਜਾਬੀ",
             sttLanguageTag = "pa-IN",
             ttsLocale = Locale("pa", "IN"),
-            sampleText = "ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ! ਮੈਂ ਜਾਰਵਿਸ ਹਾਂ। ਮੈਂ ਤੁਹਾਡੀ ਕਿਵੇਂ ਮਦਦ ਕਰ ਸਕਦਾ ਹਾਂ?",
+            sampleText = "ਸਤਿ ਸ੍ਰੀ ਅਕਾਲ! ਮੈਂ ਰਾਵਣ ਹਾਂ। ਮੈਂ ਤੁਹਾਡੀ ਕਿਵੇਂ ਮਦਦ ਕਰ ਸਕਦਾ ਹਾਂ?",
             aiPromptInstruction = "The user has selected Punjabi. Respond entirely in natural, polite Punjabi (Gurmukhi script) unless the user explicitly asks for another language.",
             additionalLangs = arrayOf("pa-IN", "hi-IN", "en-IN")
         ),
@@ -159,7 +159,7 @@ object VoiceLanguageRegistry {
             nativeName = "اردو",
             sttLanguageTag = "ur-IN",
             ttsLocale = Locale("ur", "IN"),
-            sampleText = "السلام علیکم! میں جاروس ہوں۔ میں آپ کی کیا مدد کر سکتا ہوں؟",
+            sampleText = "السلام علیکم! میں راون ہوں۔ میں آپ کی کیا مدد کر سکتا ہوں؟",
             aiPromptInstruction = "The user has selected Urdu. Respond entirely in natural, polite Urdu (Urdu script) unless the user explicitly asks for another language.",
             additionalLangs = arrayOf("ur-IN", "en-IN")
         )

@@ -855,7 +855,7 @@ class PcControlTool(private val deviceManager: DeviceManager) : Tool {
 
 class AppAutomationTool : Tool {
     override val name: String = "AppAutomationTool"
-    override val description: String = "Automates UI interactions in other apps via Jarvis Accessibility Service."
+    override val description: String = "Automates UI interactions in other apps via Ravan Accessibility Service."
     override val parameters: List<ToolParameter> = listOf(
         ToolParameter("action", "string", "Action to perform", true)
     )
@@ -865,7 +865,7 @@ class AppAutomationTool : Tool {
 
     override suspend fun execute(context: Context, params: Map<String, Any?>): ToolResult {
         val actService = JarvisAccessibilityService.instance
-            ?: return ToolResult.permissionRequired("Jarvis Accessibility Service is not active. Enable it in Android Settings.")
+            ?: return ToolResult.permissionRequired("Ravan Accessibility Service is not active. Enable it in Android Settings.")
         return ToolResult.ok("Automation command dispatched.")
     }
 }

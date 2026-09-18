@@ -8,8 +8,8 @@ class LocalRuleAIProvider : AIProvider {
 
         // Update commands
         if (p.contains("check update") || p.contains("check for update") || p.contains("update app") ||
-            p.contains("update jarvis") || p.contains("system update") || p.contains("check for updates")) {
-            return AIResponse("Checking for JARVIS updates.", ToolInvocation("AppUpdateTool", mapOf("action" to "check")))
+            p.contains("update ravan") || p.contains("update jarvis") || p.contains("system update") || p.contains("check for updates")) {
+            return AIResponse("Checking for Ravan updates.", ToolInvocation("AppUpdateTool", mapOf("action" to "check")))
         }
         if (p.contains("download update") || p.contains("download the update") || p.contains("install update")) {
             return AIResponse("Processing update.", ToolInvocation("AppUpdateTool", mapOf("action" to "download")))

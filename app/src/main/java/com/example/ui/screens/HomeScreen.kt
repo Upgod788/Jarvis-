@@ -1,11 +1,15 @@
 package com.example.ui.screens
 
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -35,6 +39,7 @@ import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.VolumeMute
 import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.Waves
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -67,6 +72,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.AssistantState
 import com.example.ui.JarvisUiState
+import com.example.ui.components.AudioPulseWaveformVisualizer
+import com.example.ui.components.MicAudioPulseHalo
+import com.example.ui.components.normalizeAudioRms
 
 @Composable
 fun HomeScreen(
@@ -79,6 +87,7 @@ fun HomeScreen(
     modifier: Modifier = Modifier
 ) {
     var textInput by remember { mutableStateOf("") }
+    var showWaveformVisualizer by remember { mutableStateOf(true) }
     val scrollState = rememberScrollState()
 
     val quickCommands = remember {
@@ -108,7 +117,7 @@ fun HomeScreen(
         ) {
             Column {
                 Text(
-                    text = "JARVIS A.I.",
+                    text = "RAVAN A.I.",
                     style = MaterialTheme.typography.titleLarge.copy(
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Bold,
@@ -123,26 +132,53 @@ fun HomeScreen(
                 )
             }
 
-            IconButton(
-                onClick = onToggleMute,
-                modifier = Modifier.testTag("toggle_voice_mute_button")
-            ) {
-                Icon(
-                    imageVector = if (uiState.isVoiceMuted) Icons.Default.VolumeMute else Icons.Default.VolumeUp,
-                    contentDescription = "Toggle Voice Mute",
-                    tint = if (uiState.isVoiceMuted) Color.Gray else MaterialTheme.colorScheme.primary
-                )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(
+                    onClick = { showWaveformVisualizer = !showWaveformVisualizer },
+                    modifier = Modifier.testTag("toggle_visualizer_mode_button")
+                ) {
+                    Icon(
+                        imageVector = if (showWaveformVisualizer) Icons.Default.GraphicEq else Icons.Default.Waves,
+                        contentDescription = "Toggle Visualizer View",
+                        tint = if (showWaveformVisualizer) MaterialTheme.colorScheme.primary else Color.Gray
+                    )
+                }
+
+                IconButton(
+                    onClick = onToggleMute,
+                    modifier = Modifier.testTag("toggle_voice_mute_button")
+                ) {
+                    Icon(
+                        imageVector = if (uiState.isVoiceMuted) Icons.Default.VolumeMute else Icons.Default.VolumeUp,
+                        contentDescription = "Toggle Voice Mute",
+                        tint = if (uiState.isVoiceMuted) Color.Gray else MaterialTheme.colorScheme.primary
+                    )
+                }
             }
         }
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
-        // Arc Reactor Visualizer
-        ArcReactorOrb(
-            state = uiState.assistantState,
-            rmsLevel = uiState.audioRmsLevel,
-            modifier = Modifier.size(190.dp)
-        )
+        // Animated Visualizer: Real-time Audio Waveform & Pulse or Arc Reactor
+        AnimatedContent(
+            targetState = (uiState.assistantState == AssistantState.LISTENING) || showWaveformVisualizer,
+            transitionSpec = { fadeIn(tween(250)) togetherWith fadeOut(tween(250)) },
+            label = "visualizer_display"
+        ) { displayWaveform ->
+            if (displayWaveform) {
+                AudioPulseWaveformVisualizer(
+                    assistantState = uiState.assistantState,
+                    rmsLevel = uiState.audioRmsLevel,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            } else {
+                ArcReactorOrb(
+                    state = uiState.assistantState,
+                    rmsLevel = uiState.audioRmsLevel,
+                    modifier = Modifier.size(190.dp)
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -186,7 +222,7 @@ fun HomeScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "JARVIS",
+                        text = "RAVAN",
                         style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -270,55 +306,60 @@ fun HomeScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        // Mic Button
+        // Mic Button with Real-time Acoustic Pulse Halo
         val isListening = uiState.assistantState == AssistantState.LISTENING
-        Box(
-            contentAlignment = Alignment.Center,
-            modifier = Modifier.padding(vertical = 8.dp)
+        MicAudioPulseHalo(
+            isListening = isListening,
+            rmsLevel = uiState.audioRmsLevel,
+            modifier = Modifier.padding(vertical = 4.dp)
         ) {
-            val pulseTransition = rememberInfiniteTransition(label = "pulse")
-            val pulseScale by pulseTransition.animateFloat(
-                initialValue = 1.0f,
-                targetValue = if (isListening) 1.25f else 1.05f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(900, easing = FastOutSlowInEasing),
-                    repeatMode = RepeatMode.Reverse
-                ),
-                label = "scale"
-            )
-
             Box(
-                modifier = Modifier
-                    .size(80.dp)
-                    .scale(if (isListening) pulseScale else 1f)
-                    .clip(CircleShape)
-                    .background(
-                        if (isListening) MaterialTheme.colorScheme.error.copy(alpha = 0.25f)
-                        else MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                    )
-            )
-
-            IconButton(
-                onClick = {
-                    if (isListening) onStopListening() else onStartListening()
-                },
-                modifier = Modifier
-                    .size(64.dp)
-                    .clip(CircleShape)
-                    .background(
-                        Brush.linearGradient(
-                            if (isListening) listOf(Color(0xFFFF3366), Color(0xFFFF6699))
-                            else listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary)
-                        )
-                    )
-                    .testTag("main_mic_button")
+                contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = if (isListening) Icons.Default.MicOff else Icons.Default.Mic,
-                    contentDescription = "Microphone",
-                    tint = Color.White,
-                    modifier = Modifier.size(32.dp)
+                val pulseTransition = rememberInfiniteTransition(label = "pulse")
+                val pulseScale by pulseTransition.animateFloat(
+                    initialValue = 1.0f,
+                    targetValue = if (isListening) 1.25f else 1.05f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(900, easing = FastOutSlowInEasing),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "scale"
                 )
+
+                Box(
+                    modifier = Modifier
+                        .size(80.dp)
+                        .scale(if (isListening) pulseScale else 1f)
+                        .clip(CircleShape)
+                        .background(
+                            if (isListening) MaterialTheme.colorScheme.error.copy(alpha = 0.25f)
+                            else MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                        )
+                )
+
+                IconButton(
+                    onClick = {
+                        if (isListening) onStopListening() else onStartListening()
+                    },
+                    modifier = Modifier
+                        .size(64.dp)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.linearGradient(
+                                if (isListening) listOf(Color(0xFFFF3366), Color(0xFFFF6699))
+                                else listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.secondary)
+                            )
+                        )
+                        .testTag("main_mic_button")
+                ) {
+                    Icon(
+                        imageVector = if (isListening) Icons.Default.MicOff else Icons.Default.Mic,
+                        contentDescription = "Microphone",
+                        tint = Color.White,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
             }
         }
 
@@ -334,7 +375,7 @@ fun HomeScreen(
             OutlinedTextField(
                 value = textInput,
                 onValueChange = { textInput = it },
-                placeholder = { Text("Ask JARVIS anything...", fontSize = 14.sp) },
+                placeholder = { Text("Ask Ravan anything...", fontSize = 14.sp) },
                 singleLine = true,
                 shape = RoundedCornerShape(24.dp),
                 colors = OutlinedTextFieldDefaults.colors(
@@ -482,9 +523,22 @@ fun ArcReactorOrb(
 
             // Core glow
             val dynamicCoreRadius = radius * 0.45f * if (state == AssistantState.LISTENING) {
-                (1f + (rmsLevel / 100f).coerceIn(0f, 0.4f))
+                val normAudio = normalizeAudioRms(rmsLevel, true)
+                (1f + normAudio * 0.65f)
             } else {
                 corePulse
+            }
+
+            // Outer acoustic pulse shockwaves when listening
+            if (state == AssistantState.LISTENING) {
+                val normAudio = normalizeAudioRms(rmsLevel, true)
+                val shockwaveRadius = radius * (0.95f + normAudio * 0.3f)
+                drawCircle(
+                    color = color.copy(alpha = (0.25f + normAudio * 0.55f).coerceIn(0f, 1f)),
+                    radius = shockwaveRadius,
+                    center = center,
+                    style = Stroke(width = (2f + (normAudio * 3f)).dp.toPx())
+                )
             }
 
             drawCircle(

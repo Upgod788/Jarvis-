@@ -38,7 +38,7 @@ class MemoryExtractor(private val privacyManager: MemoryPrivacyManager) {
         if (lower.contains("start remembering") || lower.contains("resume memory") || lower.contains("start remembering again")) {
             return MemoryVoiceAction.Resume
         }
-        if (lower.contains("clear my memory") || lower.contains("clear all memory") || lower.contains("clear all jarvis memory")) {
+        if (lower.contains("clear my memory") || lower.contains("clear all memory") || lower.contains("clear all ravan memory") || lower.contains("clear all jarvis memory")) {
             return MemoryVoiceAction.ClearAll
         }
         if (lower.contains("clear conversation memory") || lower.contains("clear conversation summaries")) {
@@ -98,7 +98,7 @@ class MemoryExtractor(private val privacyManager: MemoryPrivacyManager) {
         }
 
         // "Remember that [fact]" or "Remember [fact]"
-        val rememberRegex = Regex("""^(?:jarvis[,:\s]*)?(?:please\s+)?(?:remember\s+that|remember\s+this[:\s]*|remember)\s+(.+)""", RegexOption.IGNORE_CASE)
+        val rememberRegex = Regex("""^(?:(?:ravan|jarvis)[,:\s]*)?(?:please\s+)?(?:remember\s+that|remember\s+this[:\s]*|remember)\s+(.+)""", RegexOption.IGNORE_CASE)
         val remMatch = rememberRegex.find(trimmed)
         if (remMatch != null) {
             val fact = remMatch.groupValues[1].trim()

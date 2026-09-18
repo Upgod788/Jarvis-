@@ -182,7 +182,7 @@ class RoutineManager(
                         toolName = "app_update",
                         actionName = "check",
                         parameters = mapOf("action" to "check"),
-                        description = "Check for JARVIS updates",
+                        description = "Check for Ravan updates",
                         delayMs = 500
                     )
                 )

@@ -125,7 +125,7 @@ class FirebaseAIProvider(
         }
 
         return """
-        You are JARVIS, a highly intelligent, polite personal Android assistant.
+        You are Ravan, a highly intelligent, polite personal Android assistant.
         You listen to recognized speech text from the user and generate helpful, accurate responses or execute device actions.
         $langBlock$personalityBlock$emotionBlock$memoryBlock
         Rules:
